@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Circuit Forgery — Trajets moto</title>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <h1>Circuit Forgery</h1>
+      <p class="hint">
+        Clic gauche : ajouter un point de départ/arrivée/waypoint.<br />
+        Clic droit : ajouter un point d'intérêt.<br />
+        Le tracé évite les axes &gt; 80 km/h.
+      </p>
+
+      <div id="address-search-panel" class="panel">
+        <h2 id="address-search-heading">Rechercher une adresse</h2>
+        <input
+          type="text"
+          id="address-search-input"
+          placeholder="Adresse, ville..."
+          autocomplete="off"
+          aria-labelledby="address-search-heading"
+        />
+        <ul id="address-search-results"></ul>
+      </div>
+
+      <div id="gpx-import-panel" class="panel">
+        <h2 id="gpx-import-heading">Importer un trajet GPX</h2>
+        <p class="hint">Les points sont extraits puis recalculés (le filtre &gt; 80 km/h s'applique).</p>
+        <input type="file" id="gpx-import-input" accept=".gpx" aria-labelledby="gpx-import-heading" />
+      </div>
+
+      <div id="round-trip-panel" class="panel">
+        <h2 id="round-trip-heading">Circuit en boucle</h2>
+        <p class="hint">Distance cible, puis cliquez un point de départ sur la carte.</p>
+        <input
+          type="number"
+          id="round-trip-distance-input"
+          placeholder="Distance (km)"
+          min="1"
+          step="1"
+          aria-labelledby="round-trip-heading"
+        />
+        <button id="round-trip-generate-btn">Générer depuis un point</button>
+        <button id="round-trip-variant-btn" title="Générer une autre variante à la même distance" disabled>
+          🔀 Autre variante
+        </button>
+        <p id="round-trip-hint" class="hint hidden" role="status">
+          Cliquez un point de départ sur la carte…
+          <button id="round-trip-cancel-btn" type="button">Annuler (Échap)</button>
+        </p>
+      </div>
+
+      <div id="avoid-zone-panel" class="panel">
+        <h2>Zones à éviter</h2>
+        <p class="hint">Active le mode puis glisse sur la carte (centre → rayon) pour dessiner une zone à contourner.</p>
+        <button id="avoid-zone-toggle-btn">🚫 Éviter une zone</button>
+        <input
+          type="number"
+          id="avoid-zone-radius-input"
+          placeholder="Rayon (m), optionnel"
+          min="1"
+          aria-label="Rayon précis pour un simple tap sur la carte"
+        />
+      </div>
+
+      <div id="avoid-zone-list-panel" class="panel hidden">
+        <h2>Zones actives</h2>
+        <ul id="avoid-zone-list"></ul>
+      </div>
+
+      <button id="clear-route-btn">Effacer les points</button>
+
+      <div id="waypoint-list-panel" class="panel hidden">
+        <h2>Points du trajet</h2>
+        <p class="hint">
+          Glisser pour réordonner (ou ▲▼). Clic sur un point de la liste pour
+          le renommer/ajuster ses coordonnées. Clic sur un marqueur puis Suppr
+          pour le retirer.
+        </p>
+        <div class="waypoint-list-actions">
+          <button id="undo-waypoint-btn" title="Annuler (Ctrl+Z)" aria-label="Annuler la dernière modification" disabled>↶ Annuler</button>
+          <button id="redo-waypoint-btn" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir la modification annulée" disabled>↷ Rétablir</button>
+        </div>
+        <div class="waypoint-list-actions">
+          <button id="close-loop-btn" title="Ajouter le point de départ en fin de trajet" disabled>🔁 Fermer la boucle</button>
+          <button id="reverse-route-btn" title="Inverser l'ordre des points" disabled>⇄ Inverser le sens</button>
+        </div>
+        <ul id="waypoint-list"></ul>
+      </div>
+
+      <div id="route-error" class="panel hidden" role="alert"></div>
+
+      <div id="route-info" class="panel hidden">
+        <h2>Trajet</h2>
+        <p><strong id="route-distance"></strong> — <span id="route-duration"></span></p>
+        <button id="show-alternatives-btn" class="hidden" title="Uniquement pour un trajet à 2 points">
+          Voir les itinéraires alternatifs
+        </button>
+        <ul id="alternatives-list" class="hidden"></ul>
+        <input
+          type="text"
+          id="save-route-name-input"
+          placeholder="Nom du trajet"
+          autocomplete="off"
+          aria-label="Nom du trajet"
+        />
+        <textarea
+          id="route-description-input"
+          placeholder="Notes sur ce trajet (optionnel)"
+          rows="2"
+          aria-label="Description du trajet"
+        ></textarea>
+        <button id="save-route-btn">Sauvegarder ce trajet</button>
+        <button id="update-route-btn" class="hidden">Enregistrer les modifications</button>
+        <button id="cancel-edit-btn" class="hidden">Annuler la modification</button>
+      </div>
+
+      <div class="panel">
+        <h2>Trajets sauvegardés</h2>
+        <ul id="saved-routes-list"></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Points d'intérêt</h2>
+        <ul id="poi-list"></ul>
+      </div>
+    </aside>
+    <main id="map"></main>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

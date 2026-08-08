@@ -1,0 +1,23 @@
+{
+  "name": "circuit-forgery-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.49.0",
+    "eslint": "^10.8.1",
+    "globals": "^17.9.0",
+    "vite": "^6.0.0"
+  }
+}

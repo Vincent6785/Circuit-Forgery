@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="circuit-forgery-fixture" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>Fixture Playwright</name></metadata>
+  <rte>
+    <name>Fixture Playwright</name>
+    <rtept lat="48.8566" lon="2.3522"><name>Notre-Dame</name></rtept>
+    <rtept lat="48.8738" lon="2.2950"><name>Arc de Triomphe</name></rtept>
+  </rte>
+</gpx>

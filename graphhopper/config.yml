@@ -1,0 +1,47 @@
+graphhopper:
+  datareader.file: /data/france-latest.osm.pbf
+  graph.location: /graph-cache
+
+  custom_models.directory: /config/custom_models
+
+  profiles:
+    - name: car
+      custom_model_files: [car_default.json]
+    - name: moto_no_fast
+      custom_model_files: [moto_no_fast.json]
+
+  profiles_ch:
+    - profile: car
+
+  # moto_no_fast n'est pas en CH (Contraction Hierarchies figerait le custom_model à l'import) :
+  # LM (Landmarks) conserve un temps de réponse correct tout en restant flexible.
+  profiles_lm:
+    - profile: moto_no_fast
+
+  graph.encoded_values: car_access, car_average_speed, road_access, road_class, max_speed
+
+  # France entière : exclut les chemins non motorisés pour réduire la taille du graphe
+  import.osm.ignored_highways: footway,construction,cycleway,path,steps
+
+  graph.dataaccess.default_type: RAM_STORE
+
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      # 0.0.0.0 est nécessaire pour que le service backend (autre conteneur) puisse joindre
+      # GraphHopper via le réseau docker-compose. L'isolation vis-à-vis du LAN/host est assurée
+      # en NE PUBLIANT PAS ce port dans docker-compose.yml (pas de mapping "ports:"), pas par ce bind.
+      bind_host: 0.0.0.0
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

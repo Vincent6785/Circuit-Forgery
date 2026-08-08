@@ -1,0 +1,61 @@
+services:
+  graphhopper:
+    build: ./graphhopper
+    environment:
+      # Ajuster selon la RAM disponible sur la machine (8-16g recommandé pour la France entière)
+      - JAVA_OPTS=-Xmx16g
+    volumes:
+      - ./graphhopper/config.yml:/config/config.yml:ro
+      - ./graphhopper/custom_models:/config/custom_models:ro
+      - ./data/osm:/data:ro
+      - graph-cache:/graph-cache
+    ports:
+      # Loopback uniquement (debug local) : le backend joint GraphHopper via le réseau
+      # docker-compose interne (nom de service "graphhopper"), pas via ce port publié.
+      - "127.0.0.1:8989:8989"
+    restart: unless-stopped
+    healthcheck:
+      # Port admin Dropwizard (8990, interne au conteneur uniquement) : expose un
+      # health check nommé "graphhopper" reflétant la disponibilité réelle du graphe
+      # chargé (vérifié empiriquement contre l'instance réelle, pas juste "process up").
+      # curl est déjà installé dans l'image (cf. graphhopper/Dockerfile).
+      test: ["CMD", "curl", "-f", "http://localhost:8990/healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Généreux : un import France entière à froid peut prendre 5-60 min selon la
+      # machine (cf. README). Les échecs pendant start_period ne comptent pas contre
+      # "retries" et ne marquent pas le conteneur unhealthy.
+      start_period: 60m
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      - CF_GRAPHHOPPER_URL=http://graphhopper:8989
+      - CF_DATABASE_PATH=/data/circuit-forgery.db
+    volumes:
+      - ./backend/data:/data
+    ports:
+      # 0.0.0.0 côté conteneur + publication sur toutes les interfaces hôte :
+      # c'est le seul service exposé au LAN (cf. Phase 7 du plan).
+      - "8000:8000"
+    depends_on:
+      graphhopper:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      # Sonde de vivacité simple (le serveur HTTP répond) : /api/health renvoie
+      # toujours 200 même si graphhopper/la base sont en panne (son rôle est de
+      # renseigner l'état dans le corps de la réponse, pas de coder ça en HTTP
+      # status) — le séquencement réel du démarrage est déjà assuré par
+      # depends_on/condition ci-dessus sur le service graphhopper.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  graph-cache:
