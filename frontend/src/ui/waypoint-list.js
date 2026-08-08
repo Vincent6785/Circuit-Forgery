@@ -1,10 +1,10 @@
 import { roleForIndex } from "../map/waypoint-role.js";
 
-// État d'édition inline : module-level plutôt que dans le store, purement
-// transitoire (aucune mutation tant que l'édition n'est pas validée). Les
-// derniers arguments reçus sont conservés pour pouvoir se re-rendre soi-même
-// sans passer par une notification du store (ouvrir/fermer l'édition ne doit
-// pas déclencher un recalcul).
+// État d'édition inline, gardé au niveau du module plutôt que dans le store :
+// purement transitoire, aucune mutation tant que l'édition n'est pas
+// validée. Les derniers arguments reçus sont conservés pour permettre un
+// re-rendu autonome, sans passer par une notification du store — ouvrir ou
+// fermer l'édition ne doit pas déclencher de recalcul.
 let _editingId = null;
 let _lastArgs = null;
 
@@ -23,11 +23,11 @@ function _legDistanceM(idx, computedRoute) {
 }
 
 /**
- * Liste réordonnable (drag natif HTML5) des waypoints du trajet en cours
- * d'édition. waypointManager fournit les mutations (removePoint, reorder,
- * renamePoint, updatePoint) déclenchées par la liste. computedRoute (optionnel)
- * fournit leg_boundaries/cumulative_distance_m pour afficher la distance
- * depuis l'étape précédente.
+ * Liste réordonnable (glisser-déposer HTML5 natif) des waypoints du trajet
+ * en cours d'édition. waypointManager expose les mutations (removePoint,
+ * reorder, renamePoint, updatePoint) déclenchées depuis la liste.
+ * computedRoute, optionnel, fournit leg_boundaries et cumulative_distance_m
+ * pour afficher la distance depuis l'étape précédente.
  */
 export function renderWaypointList(waypoints, waypointManager, computedRoute) {
   _lastArgs = [waypoints, waypointManager, computedRoute];
@@ -64,8 +64,9 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
       li.appendChild(text);
     }
 
-    // Boutons ▲▼ : alternative accessible au drag natif HTML5, qui ne fonctionne
-    // ni au tactile ni au clavier (aucun événement dragstart/dragover sur mobile).
+    // Boutons ▲▼ : alternative accessible au glisser-déposer HTML5 natif, qui
+    // ne fonctionne ni au tactile ni au clavier (pas d'événement
+    // dragstart/dragover sur mobile).
     const upBtn = document.createElement("button");
     upBtn.textContent = "▲";
     upBtn.title = "Déplacer vers le haut";

@@ -8,12 +8,13 @@ from app.services.avoid_zone import build_custom_model
 
 
 class GraphHopperUnavailableError(RuntimeError):
-    """GraphHopper est injoignable ou en erreur (réseau, timeout, statut 5xx)."""
+    """Panne côté GraphHopper : injoignable, timeout, ou statut 5xx."""
 
 
 class GraphHopperRouteNotFoundError(RuntimeError):
-    """GraphHopper a répondu mais n'a pas pu calculer d'itinéraire (entrée utilisateur :
-    point hors réseau routier, aucune connexion possible en évitant les axes rapides, etc.)."""
+    """GraphHopper a bien répondu mais n'a pas pu calculer d'itinéraire — cause
+    côté entrée utilisateur : point hors réseau routier, aucune connexion
+    possible en évitant les axes rapides, etc."""
 
 
 _FRIENDLY_MESSAGES = {
@@ -36,9 +37,9 @@ def _friendly_message(data: dict) -> str:
 
 
 def _extract_paths(resp: httpx.Response) -> list[dict]:
-    # GraphHopper répond 400 pour un point sans route à proximité ou l'absence de
-    # connexion entre les points : ce sont des erreurs liées à l'entrée utilisateur,
-    # pas une panne de GraphHopper (qui a bien répondu).
+    # Un 400 GraphHopper signale un point sans route à proximité ou l'absence
+    # de connexion entre deux points — une erreur d'entrée utilisateur, pas
+    # une panne : GraphHopper a bien répondu.
     if resp.status_code == 400:
         raise GraphHopperRouteNotFoundError(_friendly_message(resp.json()))
     if resp.status_code != 200:
@@ -56,8 +57,9 @@ class GraphHopperClient:
     async def health(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=5) as client:
-                # GraphHopper n'a pas de /health dédié exposé publiquement ici ;
-                # une requête de routage triviale sert de sonde de disponibilité.
+                # Pas de /health dédié exposé ici : une requête de routage
+                # triviale entre deux points proches fait office de sonde de
+                # disponibilité.
                 resp = await client.get(
                     f"{self._base_url}/route",
                     params={
@@ -85,11 +87,12 @@ class GraphHopperClient:
         async with httpx.AsyncClient(timeout=30) as client:
             try:
                 if avoid_zones:
-                    # Zones à éviter : nécessite un corps JSON (custom_model), donc
-                    # POST plutôt que le GET utilisé pour le cas courant sans zone.
-                    # Le custom_model de la requête se fusionne côté GraphHopper avec
-                    # celui du profil moto_no_fast (vérifié empiriquement) : le filtre
-                    # anti->80km/h reste actif en plus de l'exclusion des zones.
+                    # Une zone à éviter nécessite un corps JSON (custom_model) :
+                    # POST au lieu du GET utilisé pour le cas courant sans zone.
+                    # Vérifié empiriquement que ce custom_model se fusionne côté
+                    # GraphHopper avec celui du profil moto_no_fast plutôt que
+                    # de le remplacer — le filtre anti-80km/h reste actif en
+                    # plus de l'exclusion de zone.
                     body = {
                         "points": [[lon, lat] for lat, lon in points],
                         "profile": profile_name,
@@ -105,9 +108,10 @@ class GraphHopperClient:
                         "point": [f"{lat},{lon}" for lat, lon in points],
                         "profile": profile_name,
                         "points_encoded": "false",
-                        # moto_no_fast n'a pas de préparation CH (custom_model figé à
-                        # l'import) : CH doit être désactivé pour que GraphHopper
-                        # utilise sa préparation LM.
+                        # moto_no_fast n'a pas de préparation CH — figée à
+                        # l'import pour un custom_model — donc CH doit être
+                        # désactivé pour que GraphHopper retombe sur sa
+                        # préparation LM.
                         "ch.disable": "true",
                         "details": ["max_speed", "road_class"],
                         "locale": "fr",

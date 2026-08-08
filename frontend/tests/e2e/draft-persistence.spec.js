@@ -12,7 +12,7 @@ test("un trajet non sauvegardé est restauré après rechargement de la page", a
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
 
-  // Laisse le debounce autosave (800ms) écrire le brouillon.
+  // Laisse le temps au debounce de l'autosave (800ms) d'écrire le brouillon.
   await expect
     .poll(async () => page.evaluate((key) => localStorage.getItem(key), DRAFT_KEY))
     .not.toBeNull();

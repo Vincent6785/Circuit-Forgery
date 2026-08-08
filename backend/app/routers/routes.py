@@ -76,10 +76,10 @@ async def compute_round_trip(body: RoundTripRequest):
     except GraphHopperUnavailableError as exc:
         raise HTTPException(503, str(exc)) from exc
     raw_coordinates = path["points"]["coordinates"]
-    # Réserve un emplacement sous le plafond global (settings.max_waypoints) :
-    # un circuit généré au maximum autorisé ne laisserait aucune marge pour
-    # une mutation ultérieure (ajout manuel d'un point, etc.), qui échouerait
-    # alors immédiatement contre la même limite sur /compute.
+    # Laisse volontairement un emplacement libre sous settings.max_waypoints :
+    # un circuit généré pile au plafond ne tolérerait plus aucune mutation
+    # ultérieure (ajouter un point à la main, par exemple), qui échouerait
+    # aussitôt sur ce même plafond via /compute.
     round_trip_target = max(2, settings.max_waypoints - 1)
     coordinates = subsample(raw_coordinates, round_trip_target)
     waypoints = [Waypoint(lat=lat, lon=lon) for lon, lat in coordinates]

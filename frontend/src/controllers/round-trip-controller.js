@@ -2,9 +2,9 @@ import { computeRoundTrip } from "../api/routing.js";
 import { showRouteError, showBanner } from "../ui/sidebar.js";
 
 /** Câble le panneau "Circuit en boucle" : distance cible + clic sur la carte
- * comme point de départ (algorithme round_trip de GraphHopper, cf. plan) —
- * les points générés sont adoptés comme des waypoints normaux, éditables
- * ensuite avec les outils existants. */
+ * comme point de départ, via l'algorithme round_trip de GraphHopper. Les
+ * points générés sont ensuite traités comme des waypoints normaux,
+ * éditables avec les outils existants. */
 export function initRoundTripController({ map, store, waypointManager, recomputeAndRender }) {
   const distanceInput = document.getElementById("round-trip-distance-input");
   const generateBtn = document.getElementById("round-trip-generate-btn");
@@ -28,11 +28,11 @@ export function initRoundTripController({ map, store, waypointManager, recompute
       const result = await computeRoundTrip({ lat, lon }, distanceM, seed);
       waypointManager.replaceAll(result.waypoints);
       store.setState({ editingRouteId: null }, { silent: true });
-      // Attend explicitement la fin du recalcul (déclenché aussi, en
-      // fire-and-forget, par replaceAll ci-dessus) pour que le bandeau de
-      // simplification ci-dessous ne soit pas écrasé par
-      // hideRouteError()/showRouteError() une fois ce calcul résolu — même
-      // course critique que pour l'import GPX (cf. gpx-controller.js).
+      // replaceAll ci-dessus a déjà déclenché un recalcul en fire-and-forget ;
+      // on attend explicitement sa fin pour que le bandeau de simplification
+      // affiché plus bas ne soit pas écrasé par le hideRouteError()/
+      // showRouteError() de ce calcul — même course critique que pour
+      // l'import GPX (voir gpx-controller.js).
       await recomputeAndRender(result.waypoints);
       if (result.simplified) {
         showBanner(
@@ -70,10 +70,11 @@ export function initRoundTripController({ map, store, waypointManager, recompute
 
   cancelBtn.addEventListener("click", () => stopPicking());
 
-  // Pas de garde anti-frappe-dans-un-champ ici (contrairement à Suppr dans
-  // markers.js) : Échap n'a pas de sens concurrent dans un champ texte/nombre,
-  // et le cas courant est justement d'avoir encore le focus sur
-  // #round-trip-distance-input juste après avoir cliqué "Générer".
+  // Volontairement sans garde anti-frappe-dans-un-champ (contrairement à
+  // Suppr dans markers.js) : Échap n'a pas d'usage concurrent dans un champ
+  // texte/nombre, et le cas le plus fréquent est justement d'avoir encore
+  // le focus sur #round-trip-distance-input juste après avoir cliqué
+  // "Générer".
   document.addEventListener("keydown", (e) => {
     if (!picking || e.key !== "Escape") return;
     stopPicking();

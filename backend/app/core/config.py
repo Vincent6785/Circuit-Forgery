@@ -6,8 +6,8 @@ class Settings(BaseSettings):
     graphhopper_profile: str = "moto_no_fast"
     database_path: str = "/data/circuit-forgery.db"
 
-    # Bornes approximatives France métropolitaine + Corse, pour rejeter les
-    # requêtes de coordonnées aberrantes avant d'interroger GraphHopper.
+    # Cadre approximatif de la France métropolitaine et de la Corse : sert à
+    # écarter une coordonnée aberrante avant même d'appeler GraphHopper.
     min_lat: float = 41.0
     max_lat: float = 51.5
     min_lon: float = -5.5
@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     max_round_trip_distance_m: float = 500_000
 
     nominatim_url: str = "https://nominatim.openstreetmap.org"
-    # Politique d'usage Nominatim : User-Agent identifiant obligatoire, max ~1 req/s.
+    # Ces deux réglages découlent de la politique d'usage de Nominatim :
+    # User-Agent identifiant obligatoire, ~1 requête/s maximum.
     nominatim_user_agent: str = "circuit-forgery/0.1 (usage local non commercial)"
     nominatim_min_interval_s: float = 1.1
 

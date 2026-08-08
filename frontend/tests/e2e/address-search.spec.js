@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 
-// Exception documentée à la convention "pas de mocks" du projet : Nominatim est
-// un service tiers public à fort rate-limit, non fourni par la stack Docker du
-// projet. Seul GET /api/geocode est mocké ici ; tout le reste (ajout du point,
-// store, liste sidebar) s'exécute contre le vrai code de l'app.
+// Exception documentée à la règle "pas de mocks" du projet : Nominatim est
+// un service tiers public au rate-limit strict, absent de la stack Docker
+// locale. Seul GET /api/geocode est simulé ici — tout le reste (ajout du
+// point, store, liste sidebar) tourne contre le vrai code de l'app.
 const MOCK_RESULTS = [{ label: "Tour Eiffel, Paris, France", lat: 48.8583, lon: 2.2945 }];
 
 test("recherche d'adresse : sélectionner un résultat ajoute un waypoint", async ({ page }) => {

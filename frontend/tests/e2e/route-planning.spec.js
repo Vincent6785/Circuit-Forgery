@@ -3,7 +3,7 @@ import { clickMapAt, collectPageErrors } from "./helpers.js";
 
 const ROUTE_NAME = "Trajet Playwright Test";
 
-// Deux points routables à Paris intra-muros (repris du smoke-test-routing.sh backend).
+// Deux points routables à Paris intra-muros, repris du smoke-test-routing.sh backend.
 const POINT_A = { lat: 48.8566, lon: 2.3522 };
 const POINT_B = { lat: 48.8738, lon: 2.295 };
 
@@ -12,9 +12,10 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
 
   await page.goto("/");
   await expect(page.locator("#map")).toBeVisible();
-  // Zoom sur Paris : au zoom initial (France entière), ces deux points sont trop
-  // proches en pixels et le 2e clic tomberait sur le marqueur du 1er (sélection
-  // au lieu d'ajout d'un point, cf. waypoint-editing.spec.js Phase 1).
+  // Zoom sur Paris : au zoom initial (France entière), ces deux points sont
+  // trop proches en pixels et le 2e clic tomberait sur le marqueur du 1er,
+  // sélectionnant le point au lieu d'en ajouter un nouveau (voir
+  // waypoint-editing.spec.js).
   await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
 
   await clickMapAt(page, POINT_A.lat, POINT_A.lon);
@@ -34,8 +35,8 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
   await page.reload();
   await expect(page.locator("#saved-routes-list li", { hasText: ROUTE_NAME })).toBeVisible();
 
-  // Cliquer le trajet sauvegardé ne doit PAS déclencher un nouvel appel de calcul
-  // (le tracé est réaffiché depuis le geometry_geojson mis en cache).
+  // Cliquer le trajet sauvegardé ne doit PAS déclencher un nouvel appel de
+  // calcul : le tracé est réaffiché depuis le geometry_geojson mis en cache.
   let computeCalled = false;
   page.on("request", (req) => {
     if (req.url().includes("/api/routes/compute")) computeCalled = true;
@@ -44,7 +45,7 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
   expect(computeCalled).toBe(false);
 
-  // Nettoyage : supprimer le trajet créé pour ne pas polluer les runs suivants.
+  // Nettoyage : supprime le trajet créé, pour ne pas polluer les runs suivants.
   const routes = await request.get("/api/routes").then((r) => r.json());
   const created = routes.find((r) => r.name === ROUTE_NAME);
   if (created) {

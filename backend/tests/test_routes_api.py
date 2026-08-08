@@ -98,9 +98,9 @@ def test_round_trip_marks_simplified_when_dense_track_is_subsampled(client, monk
     )
     data = resp.json()
     assert data["simplified"] is True
-    # Une marge d'un emplacement est réservée sous settings.max_waypoints (20)
-    # pour qu'une mutation ultérieure (ex. ajouter un point) ne dépasse pas
-    # immédiatement la limite sur /compute.
+    # Un emplacement reste volontairement libre sous settings.max_waypoints
+    # (20), pour qu'une mutation ultérieure (ajouter un point, par exemple)
+    # ne heurte pas aussitôt cette même limite sur /compute.
     assert len(data["waypoints"]) <= 19
 
 
@@ -117,10 +117,9 @@ def test_round_trip_not_simplified_for_short_track(client, monkeypatch):
 
 
 def test_round_trip_reserves_headroom_under_max_waypoints(client, monkeypatch):
-    # Un tracé dense généré doit toujours laisser au moins un emplacement
-    # libre sous settings.max_waypoints, pour qu'une mutation ultérieure
-    # (ex. ajouter un point sur la carte) ne dépasse pas immédiatement la
-    # limite lors du recalcul automatique sur /compute.
+    # Vérifie le contrat de bout en bout : un tracé dense généré laisse bien
+    # la marge annoncée ci-dessus, et ajouter un point après coup passe le
+    # recalcul automatique sur /compute sans re-déclencher la même erreur.
     dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(500)]
 
     async def fake_round_trip(start, distance_m, seed=None, profile=None):
@@ -137,7 +136,7 @@ def test_round_trip_reserves_headroom_under_max_waypoints(client, monkeypatch):
     )
     data = resp.json()
     waypoints = data["waypoints"]
-    assert len(waypoints) < 20  # settings.max_waypoints — marge disponible
+    assert len(waypoints) < 20  # settings.max_waypoints, avec la marge réservée à la génération
 
     follow_up = client.post(
         "/api/routes/compute",

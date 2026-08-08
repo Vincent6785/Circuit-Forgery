@@ -57,7 +57,7 @@ test("description de trajet sauvegardée, restaurée au rechargement et en édit
   await page.locator("#save-route-btn").click();
   await expect(page.locator("#saved-routes-list li", { hasText: name })).toBeVisible();
 
-  // Le champ se vide après une sauvegarde réussie (comme le nom).
+  // Le champ se vide après une sauvegarde réussie, tout comme le nom.
   await expect(page.locator("#route-description-input")).toHaveValue("");
 
   const routes = await request.get("/api/routes").then((r) => r.json());

@@ -1,8 +1,8 @@
 /**
- * Store pub/sub minimal. `meta.silent = true` signale un chargement d'état déjà
- * connu (aperçu trajet sauvegardé, restauration brouillon) : les abonnés qui ne
- * doivent réagir qu'aux mutations utilisateur (recalcul d'itinéraire, autosave du
- * brouillon) doivent l'ignorer.
+ * Store pub/sub minimal. `meta.silent = true` signale le chargement d'un état
+ * déjà connu (aperçu d'un trajet sauvegardé, restauration d'un brouillon) :
+ * les abonnés qui ne doivent réagir qu'à une mutation utilisateur (recalcul
+ * d'itinéraire, autosave du brouillon) doivent l'ignorer.
  */
 export function createStore(initialState) {
   let state = { ...initialState };

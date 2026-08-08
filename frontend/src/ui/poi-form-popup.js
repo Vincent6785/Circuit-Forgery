@@ -1,8 +1,9 @@
 import L from "leaflet";
 import { POI_CATEGORIES } from "../map/poi-layer.js";
 
-/** Ouvre un formulaire (popup Leaflet) pour créer un POI à l'endroit cliqué.
- * onSubmit({name, lat, lon, category, notes}) est appelé à la validation. */
+/** Ouvre un formulaire, sous forme de popup Leaflet, pour créer un POI à
+ * l'endroit cliqué. onSubmit({name, lat, lon, category, notes}) est appelé
+ * une fois le formulaire validé. */
 export function openPoiCreationPopup(map, latlng, onSubmit) {
   const container = document.createElement("div");
   container.className = "poi-form-popup";

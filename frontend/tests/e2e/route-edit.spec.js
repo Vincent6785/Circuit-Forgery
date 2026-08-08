@@ -26,7 +26,7 @@ test("édition d'un trajet sauvegardé : Modifier -> mutation -> enregistrement 
   const savedItem = page.locator("#saved-routes-list li", { hasText: ROUTE_NAME });
   await expect(savedItem).toBeVisible();
 
-  // Entrer en mode édition via le bouton "✎".
+  // Entre en mode édition via le bouton "✎".
   await savedItem.locator("button", { hasText: "✎" }).click();
 
   await expect(page.locator("#save-route-btn")).toHaveClass(/hidden/);
@@ -34,24 +34,24 @@ test("édition d'un trajet sauvegardé : Modifier -> mutation -> enregistrement 
   await expect(page.locator("#cancel-edit-btn")).not.toHaveClass(/hidden/);
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
 
-  // Mutation du tracé : ajout d'un 3e point.
+  // Mutation du tracé : ajoute un 3e point.
   await clickMapAt(page, POINT_C.lat, POINT_C.lon);
   await expect(page.locator("#waypoint-list li")).toHaveCount(3);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
 
   await page.locator("#update-route-btn").click();
 
-  // Le mode édition se referme après enregistrement.
+  // Le mode édition se referme une fois l'enregistrement effectué.
   await expect(page.locator("#save-route-btn")).not.toHaveClass(/hidden/);
   await expect(page.locator("#update-route-btn")).toHaveClass(/hidden/);
 
-  // Vérification côté backend : le trajet persisté a bien 3 waypoints désormais.
+  // Vérifie côté backend que le trajet persisté a bien 3 waypoints désormais.
   const routes = await request.get("/api/routes").then((r) => r.json());
   const updated = routes.find((r) => r.name === ROUTE_NAME);
   expect(updated).toBeTruthy();
   expect(updated.waypoints).toHaveLength(3);
 
-  // Persistance après rechargement : rouvrir en édition doit refléter les 3 points.
+  // Persistance après rechargement : rouvrir en édition doit bien montrer les 3 points.
   await page.reload();
   await page
     .locator("#saved-routes-list li", { hasText: ROUTE_NAME })

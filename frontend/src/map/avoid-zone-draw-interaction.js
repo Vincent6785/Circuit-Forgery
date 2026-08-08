@@ -1,18 +1,20 @@
 import L from "leaflet";
 
 const ZONE_COLOR = "#c62828";
-const MIN_RADIUS_M = 20; // ignore les glissés quasi nuls (clic accidentel)
+const MIN_RADIUS_M = 20; // en dessous, on considère que c'est un clic accidentel plutôt qu'un vrai glissé
 
-/** Mode togglable : une fois actif, glisser sur la carte définit une zone à
- * éviter (centre au mousedown, rayon = distance jusqu'au relâchement) — même
- * pattern de "ghost drag" que route-insert-interaction.js. Reste actif après
- * un tracé pour permettre d'en dessiner plusieurs à la suite ; seul un
- * nouveau clic sur le bouton de bascule désactive le mode.
+/** Mode togglable : une fois activé, glisser sur la carte définit une zone à
+ * éviter (centre au mousedown, rayon égal à la distance jusqu'au
+ * relâchement) — même pattern de "ghost drag" que route-insert-interaction.js.
+ * Le mode reste actif après un premier tracé, pour permettre d'en dessiner
+ * plusieurs à la suite ; seul un nouveau clic sur le bouton de bascule le
+ * désactive.
  *
- * getPresetRadiusM (optionnel) : si un simple tap/clic sans glisser réel est
- * détecté (rayon < MIN_RADIUS_M) et que cette fonction retourne une valeur
- * positive, elle est utilisée comme rayon plutôt que d'ignorer l'interaction
- * — voie tactile/précise complémentaire au glisser (cf. plan). */
+ * getPresetRadiusM (optionnel) : quand le relâchement produit un rayon quasi
+ * nul (tap/clic sans glisser réel, < MIN_RADIUS_M) et que cette fonction
+ * renvoie une valeur positive, celle-ci est utilisée comme rayon au lieu
+ * d'ignorer l'interaction — une voie tactile/précise en complément du
+ * glisser. */
 export class AvoidZoneDrawInteraction {
   constructor(map, onZoneDrawn, getPresetRadiusM) {
     this._map = map;

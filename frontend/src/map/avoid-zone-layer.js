@@ -2,9 +2,9 @@ import L from "leaflet";
 
 const ZONE_COLOR = "#c62828";
 
-/** Affiche les zones à éviter (cercles semi-transparents) et permet de les
- * retirer via un lien dans leur popup. onRemove(index) est appelé avec la
- * position de la zone dans le tableau reçu par render(). */
+/** Affiche les zones à éviter sous forme de cercles semi-transparents, et
+ * permet de les retirer via un lien dans leur popup. onRemove(index) reçoit
+ * la position de la zone retirée dans le tableau passé à render(). */
 export class AvoidZoneLayer {
   constructor(map, onRemove) {
     this._map = map;

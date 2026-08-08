@@ -11,13 +11,13 @@ async function _postJson(url, body, fallbackMessage) {
   return res.json();
 }
 
-/** Convertit une zone JS ({lat, lon, radiusM}) au format attendu par l'API
- * ({lat, lon, radius_m}). */
+/** Passe une zone du format JS ({lat, lon, radiusM}) au format attendu par
+ * l'API ({lat, lon, radius_m}). */
 export function toApiAvoidZones(zones) {
   return zones.map((z) => ({ lat: z.lat, lon: z.lon, radius_m: z.radiusM }));
 }
 
-/** Conversion inverse, pour charger les zones d'un trajet sauvegardé. */
+/** Sens inverse, pour recharger les zones d'un trajet sauvegardé. */
 export function fromApiAvoidZones(zones) {
   return (zones || []).map((z) => ({ lat: z.lat, lon: z.lon, radiusM: z.radius_m }));
 }

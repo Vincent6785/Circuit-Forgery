@@ -18,23 +18,24 @@ function newId() {
 }
 
 /**
- * Gère les waypoints d'un trajet : marqueurs sur la carte + état poussé dans le
- * store (clé "waypoints"). Chaque mutation utilisateur (ajout, suppression,
- * déplacement, réorganisation) notifie le store en mode non-silencieux
- * (déclenche recalcul + autosave côté abonnés) ; setPointsSilently (aperçu d'un
- * trajet sauvegardé, restauration de brouillon) notifie en mode silencieux.
+ * Gère les waypoints d'un trajet : marqueurs sur la carte, et état reflété
+ * dans le store (clé "waypoints"). Chaque mutation utilisateur (ajout,
+ * suppression, déplacement, réorganisation) notifie le store en mode
+ * non-silencieux, ce qui déclenche recalcul et autosave chez les abonnés ;
+ * setPointsSilently — aperçu d'un trajet sauvegardé, restauration de
+ * brouillon — notifie au contraire en mode silencieux.
  *
  * L'historique undo/redo (state/history.js) est partagé avec les zones à
- * éviter (controllers/avoid-zone-controller.js pousse aussi ses propres
- * snapshots dessus) : Ctrl+Z annule la dernière mutation quelle que soit sa
- * source, waypoints ou zones.
+ * éviter : controllers/avoid-zone-controller.js y pousse aussi ses propres
+ * snapshots, si bien que Ctrl+Z annule la dernière mutation quelle que soit
+ * sa source, waypoint ou zone.
  */
 export class WaypointManager {
   constructor(map, store, history) {
     this._map = map;
     this._store = store;
     this._history = history;
-    this._points = []; // [{id, lat, lon}]
+    this._points = []; // liste de {id, lat, lon}
     this._markers = [];
     this._selectedId = null;
     this._addOnMapClick = true;
@@ -74,22 +75,23 @@ export class WaypointManager {
     return this._points.map((p) => ({ ...p }));
   }
 
-  /** Snapshot combiné waypoints + zones à éviter, tel que partagé sur
+  /** Snapshot combiné waypoints + zones à éviter, dans le format attendu par
    * l'historique commun (state/history.js). */
   _fullSnapshot() {
     return { waypoints: this._snapshot(), avoidZones: this._store.getState().avoidZones };
   }
 
-  /** À appeler par toute mutation utilisateur avant de modifier _points :
-   * archive l'état courant (waypoints + zones à éviter) pour undo() et
-   * invalide la pile redo (une nouvelle mutation rend l'historique "futur"
-   * obsolète, comportement standard). */
+  /** À appeler par toute mutation utilisateur avant de toucher à _points :
+   * archive l'état courant (waypoints + zones à éviter) pour un futur undo(),
+   * et invalide la pile redo — une nouvelle mutation rend l'historique
+   * "futur" obsolète, comportement standard d'un undo/redo. */
   _pushHistory() {
     this._history.push(this._fullSnapshot());
   }
 
   /** Applique un snapshot restauré et notifie waypoints + avoidZones en une
-   * seule fois (un seul recalcul, cohérent avec les deux à jour ensemble). */
+   * seule fois — un seul recalcul, avec les deux à jour ensemble plutôt que
+   * l'un après l'autre. */
   _applySnapshot(snapshot) {
     this._points = snapshot.waypoints;
     this._selectedId = null;
@@ -156,9 +158,8 @@ export class WaypointManager {
     this.editPoint(id, { label });
   }
 
-  /** Mutation combinée lat/lon/label en une seule notification (évite un
-   * double recalcul quand la liste de waypoints modifie plusieurs champs
-   * à la fois, cf. ui/waypoint-list.js). */
+  /** Modifie lat/lon/label en une seule notification, pour éviter un double
+   * recalcul quand ui/waypoint-list.js change plusieurs champs à la fois. */
   editPoint(id, { lat, lon, label } = {}) {
     const point = this._points.find((p) => p.id === id);
     if (!point) return;
@@ -210,10 +211,11 @@ export class WaypointManager {
     this._notify(false);
   }
 
-  /** Positionne les marqueurs sans déclencher de recalcul/autosave (mode silencieux).
-   * Réinitialise aussi l'historique undo/redo : charger un contexte différent
-   * (aperçu d'un trajet sauvegardé, restauration de brouillon) ne doit pas
-   * permettre d'annuler vers l'état d'un trajet précédent sans rapport. */
+  /** Positionne les marqueurs en mode silencieux, sans déclencher de recalcul
+   * ni d'autosave. Réinitialise aussi l'historique undo/redo : charger un
+   * contexte différent (aperçu d'un trajet sauvegardé, restauration de
+   * brouillon) ne doit pas permettre d'annuler vers l'état d'un trajet
+   * précédent sans rapport. */
   setPointsSilently(points) {
     this._points = points.map((p) => ({ id: p.id ?? newId(), lat: p.lat, lon: p.lon, label: p.label ?? null }));
     this._selectedId = null;
@@ -236,9 +238,9 @@ export class WaypointManager {
     return this._points.map((p) => ({ ...p }));
   }
 
-  /** Désactive temporairement l'ajout d'un point au clic carte (ex. pendant
-   * qu'un autre mode "prochain clic = ..." attend sa propre interaction,
-   * cf. controllers/round-trip-controller.js). */
+  /** Désactive temporairement l'ajout d'un point au clic carte — utilisé
+   * pendant qu'un autre mode "prochain clic = ..." attend sa propre
+   * interaction, voir controllers/round-trip-controller.js. */
   setAddOnMapClickEnabled(enabled) {
     this._addOnMapClick = enabled;
   }

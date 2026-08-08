@@ -19,9 +19,10 @@ async function clickMapAt(page, lat, lon) {
   await page.mouse.click(box.x + point.x, box.y + point.y);
 }
 
-// Le seed de round_trip n'est pas garanti reproductible à l'identique entre
-// versions de GraphHopper : on vérifie le contrat (≥2 waypoints, distance
-// approximativement cible, tracé fermé), pas l'exactitude géométrique.
+// Le seed de round_trip n'est pas garanti reproductible à l'identique d'une
+// version de GraphHopper à l'autre : on vérifie ici le contrat (≥2
+// waypoints, distance proche de la cible, tracé fermé), pas l'exactitude
+// géométrique.
 test("génération d'un circuit en boucle depuis un point cliqué", async ({ page }) => {
   await setupParisView(page);
 
@@ -36,9 +37,9 @@ test("génération d'un circuit en boucle depuis un point cliqué", async ({ pag
 
   const waypoints = await page.evaluate(() => window.__getWaypoints());
   expect(waypoints.length).toBeGreaterThanOrEqual(2);
-  // Une marge d'un emplacement est réservée sous la limite de 20 waypoints
-  // (backend/app/routers/routes.py::compute_round_trip) pour qu'une
-  // mutation ultérieure ne la dépasse pas immédiatement.
+  // Un emplacement reste réservé sous la limite de 20 waypoints
+  // (backend/app/routers/routes.py::compute_round_trip), pour qu'une
+  // mutation ultérieure ne la dépasse pas aussitôt.
   expect(waypoints.length).toBeLessThan(20);
 
   const distanceText = await page.locator("#route-distance").textContent();
@@ -48,10 +49,10 @@ test("génération d'un circuit en boucle depuis un point cliqué", async ({ pag
 
   await expect(page.locator("#round-trip-variant-btn")).toBeEnabled();
 
-  // Un vrai circuit round_trip renvoie largement plus de points bruts que
-  // max_waypoints (~280 pour 15km vs 20) : le bandeau de simplification
-  // s'affiche donc en pratique systématiquement, pas seulement sur un cas
-  // limite synthétique.
+  // Un vrai circuit round_trip renvoie bien plus de points bruts que
+  // max_waypoints (environ 280 pour 15km, contre 20) : le bandeau de
+  // simplification s'affiche donc systématiquement en pratique, pas
+  // seulement sur un cas limite artificiel.
   const banner = page.locator("#route-error");
   await expect(banner).not.toHaveClass(/hidden/);
   await expect(banner).toHaveClass(/info/);
@@ -67,9 +68,9 @@ test("ajouter un point après un circuit dense ne dépasse pas la limite de wayp
   await clickMapAt(page, 48.8566, 2.3522);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
 
-  // Un circuit à 15km est systématiquement dense (cf. test précédent) donc
-  // proche du plafond de waypoints ; la marge réservée à la génération doit
-  // permettre d'en ajouter un de plus sans déclencher l'erreur backend
+  // Un circuit à 15km est systématiquement dense (voir le test précédent),
+  // donc proche du plafond de waypoints ; la marge réservée à la génération
+  // doit suffire à en ajouter un de plus sans déclencher l'erreur backend
   // "Trop de waypoints".
   await clickMapAt(page, 48.86, 2.34);
   await page.waitForTimeout(500);
@@ -87,8 +88,8 @@ test("le bouton fermer la boucle est déjà désactivé après génération d'un
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
 
   // Un circuit round_trip revient exactement au point de départ snappé
-  // (vérifié empiriquement contre GraphHopper) : pas besoin de "Fermer la
-  // boucle", le bouton se désactive donc déjà tout seul.
+  // (vérifié empiriquement contre GraphHopper) : "Fermer la boucle" n'a
+  // donc rien à faire, et le bouton se désactive déjà tout seul.
   await expect(page.locator("#close-loop-btn")).toBeDisabled();
 });
 
@@ -102,8 +103,8 @@ test("Échap annule le mode génération sans créer de circuit", async ({ page 
   await page.keyboard.press("Escape");
   await expect(page.locator("#round-trip-hint")).toHaveClass(/hidden/);
 
-  // Le clic suivant doit redevenir un ajout de point normal, pas une
-  // génération de circuit.
+  // Le clic suivant doit redevenir un ajout de point ordinaire, pas
+  // déclencher une génération de circuit.
   await clickMapAt(page, 48.8566, 2.3522);
   await expect(page.locator("#waypoint-list li")).toHaveCount(1);
   const waypoints = await page.evaluate(() => window.__getWaypoints());
@@ -146,7 +147,7 @@ test("fermer la boucle ajoute le point de départ en fin de trajet", async ({ pa
   expect(waypoints[0].lat).toBeCloseTo(waypoints[2].lat, 5);
   expect(waypoints[0].lon).toBeCloseTo(waypoints[2].lon, 5);
 
-  // La boucle est fermée : le bouton se désactive à nouveau.
+  // La boucle est désormais fermée : le bouton se désactive à nouveau.
   await expect(page.locator("#close-loop-btn")).toBeDisabled();
 });
 

@@ -209,9 +209,9 @@ html, body, #app {
 }
 
 .waypoint-item button {
-  /* #waypoint-list-panel a la classe .panel : sans ce reset, la règle
-     générique ".panel button { width: 100%; }" (cf. sauvegarde de trajet)
-     s'applique aussi ici et affame le libellé flex:1 (poussé à 0px). */
+  /* #waypoint-list-panel porte aussi la classe .panel : sans ce reset, la
+     règle générique ".panel button { width: 100%; }" s'applique ici aussi
+     et prend toute la place du libellé flex:1, réduit à 0px. */
   width: auto;
   flex-shrink: 0;
   cursor: pointer;
@@ -277,9 +277,10 @@ html, body, #app {
   flex: 1;
 }
 
-/* Écrans étroits (téléphone) : la disposition côte à côte (sidebar 320px fixe
- * + carte) ne tient pas sur un viewport mobile — on empile verticalement,
- * avec la carte occupant une hauteur fixe utilisable au lieu de flex:1. */
+/* Écrans étroits (téléphone) : la disposition côte à côte (sidebar 320px
+ * fixe + carte) ne tient pas sur un viewport mobile. On empile alors
+ * verticalement, avec la carte sur une hauteur fixe utilisable plutôt que
+ * flex:1. */
 @media (max-width: 768px) {
   #app {
     flex-direction: column;

@@ -9,9 +9,9 @@ export function hideRouteInfo() {
   document.getElementById("route-info").classList.add("hidden");
 }
 
-/** Bandeau générique (erreur ou information) réutilisant le même emplacement
- * inline — remplace les popups navigateur bloquantes (alert/confirm) pour les
- * messages non critiques. */
+/** Bandeau générique (erreur ou information) qui réutilise le même
+ * emplacement inline, à la place des popups navigateur bloquantes
+ * (alert/confirm) pour les messages non critiques. */
 export function showBanner(message, { type = "error" } = {}) {
   const el = document.getElementById("route-error");
   el.textContent = message;

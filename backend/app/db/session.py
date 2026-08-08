@@ -17,18 +17,19 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db() -> None:
-    from app.db import models  # noqa: F401  (enregistre les modèles auprès de Base)
+    from app.db import models  # noqa: F401  (import nécessaire pour enregistrer les modèles auprès de Base)
 
     Base.metadata.create_all(bind=engine)
     _apply_additive_migrations()
 
 
 def _apply_additive_migrations() -> None:
-    """create_all() ne modifie jamais le schéma d'une table déjà existante : sur
-    une base SQLite créée par une version antérieure de l'app, une nouvelle
-    colonne nullable doit être ajoutée à la main. Pattern volontairement léger
-    (pas d'Alembic) proportionné à un outil local mono/quelques utilisateurs —
-    toute future colonne nullable s'ajoute ici de la même façon."""
+    """create_all() ne touche jamais au schéma d'une table déjà existante :
+    sur une base SQLite créée par une version antérieure de l'app, une
+    nouvelle colonne nullable doit donc être ajoutée à la main ici. Choix
+    volontairement léger (pas d'Alembic), proportionné à un outil local pour
+    un usage mono ou quelques utilisateurs — toute future colonne nullable
+    suit le même schéma."""
     with engine.begin() as conn:
         existing_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(routes)"))}
         if "updated_at" not in existing_columns:

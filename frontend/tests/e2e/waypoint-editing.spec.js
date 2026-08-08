@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { clickMapAt } from "./helpers.js";
 
-// Zoom sur Paris pour espacer suffisamment les points à l'écran (évite qu'un clic
-// tombe sur un marqueur existant ou sur les contrôles Leaflet en bas à droite).
+// Zoom sur Paris pour espacer suffisamment les points à l'écran — évite
+// qu'un clic tombe sur un marqueur existant ou sur les contrôles Leaflet en
+// bas à droite.
 async function setupParisView(page) {
   await page.goto("/");
   await expect(page.locator("#map")).toBeVisible();
@@ -72,7 +73,7 @@ test("sélection d'un marqueur puis suppression au clavier (touche Suppr)", asyn
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
 
-  // Suppr sans sélection : ne doit rien faire.
+  // Suppr sans aucune sélection active ne doit rien faire.
   await page.keyboard.press("Delete");
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
 

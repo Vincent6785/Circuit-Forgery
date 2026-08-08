@@ -56,10 +56,11 @@ def _parse_points(elements: list, ns: str) -> list[Waypoint]:
 
 
 def parse_gpx(content: bytes, max_waypoints: int) -> tuple[list[Waypoint], bool]:
-    """Extrait les waypoints d'un fichier GPX : priorité <rte>/<rtept> puis
-    <wpt>, sinon sous-échantillonnage d'un <trk> (souvent des milliers de
-    points, incompatible avec max_waypoints). Retourne aussi si le fichier a
-    été tronqué/sous-échantillonné pour respecter la limite."""
+    """Extrait les waypoints d'un fichier GPX, par ordre de priorité :
+    <rte>/<rtept>, puis <wpt>, et en dernier recours un <trk> sous-échantillonné
+    (souvent plusieurs milliers de points, bien au-delà de max_waypoints).
+    Le second élément du tuple indique si un troncage/sous-échantillonnage a
+    été nécessaire pour respecter la limite."""
     try:
         root = defused_fromstring(content)
     except ET.ParseError as exc:

@@ -8,8 +8,9 @@ from app.services.geocoding_client import NominatimClient
 
 @pytest.fixture(autouse=True)
 def _fast_throttle(monkeypatch):
-    # Évite d'attendre l'intervalle réel (1.1s par défaut) entre requêtes non
-    # servies par le cache : sans effet sur ce que les tests vérifient.
+    # Court-circuite l'intervalle réel (1.1s par défaut) entre deux requêtes
+    # non servies par le cache — n'a aucune incidence sur ce que ces tests
+    # vérifient, seulement sur leur durée.
     monkeypatch.setattr(settings, "nominatim_min_interval_s", 0.0)
 
 

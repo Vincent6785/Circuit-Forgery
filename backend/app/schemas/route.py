@@ -31,13 +31,13 @@ class ComputeRouteResponse(BaseModel):
     road_class_by_segment: list[Optional[str]] = []
     leg_boundaries: list[int] = []
     cumulative_distance_m: list[float] = []
-    # Rempli uniquement par l'endpoint round-trip (les waypoints y sont générés
-    # côté serveur) ; vide pour un calcul normal où le frontend connaît déjà
-    # les waypoints qu'il a envoyés.
+    # Seul l'endpoint round-trip renseigne ce champ, puisque c'est lui qui
+    # génère les waypoints côté serveur ; un calcul classique le laisse vide,
+    # le frontend connaissant déjà les points qu'il a envoyés.
     waypoints: list[Waypoint] = []
-    # True uniquement par l'endpoint round-trip quand le tracé généré par
-    # GraphHopper a dû être sous-échantillonné pour tenir sous max_waypoints
-    # (même principe que GpxImportResponse.truncated pour l'import GPX).
+    # Passe à True côté round-trip quand le tracé brut renvoyé par GraphHopper
+    # a dû être sous-échantillonné pour respecter max_waypoints — même logique
+    # que GpxImportResponse.truncated côté import GPX.
     simplified: bool = False
 
 
@@ -62,8 +62,8 @@ class RouteCreate(BaseModel):
     distance_m: float
     duration_s: float
     geometry_geojson: dict
-    # Métadonnée informative uniquement : compute_route utilise toujours
-    # settings.graphhopper_profile, il n'y a pas de sélection de profil côté UI.
+    # Purement informatif : il n'existe aucun sélecteur de profil côté UI,
+    # compute_route s'appuie toujours sur settings.graphhopper_profile.
     profile: str = settings.graphhopper_profile
     avoid_zones: Optional[list[AvoidZone]] = None
 
@@ -72,9 +72,10 @@ class RouteUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_favorite: Optional[bool] = None
-    # Mode édition : remplace le tracé d'un trajet déjà sauvegardé. Le recalcul
-    # GraphHopper est fait côté frontend (POST /compute) avant ce PUT, comme pour
-    # RouteCreate qui reçoit déjà un résultat précalculé.
+    # Présent seulement en édition, pour remplacer le tracé d'un trajet déjà
+    # sauvegardé. Le recalcul GraphHopper a lieu côté frontend (POST /compute)
+    # avant ce PUT — comme RouteCreate, cet endpoint ne reçoit qu'un résultat
+    # déjà calculé.
     waypoints: Optional[list[Waypoint]] = None
     distance_m: Optional[float] = None
     duration_s: Optional[float] = None

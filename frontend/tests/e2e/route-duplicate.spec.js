@@ -26,13 +26,13 @@ test("dupliquer un trajet sauvegardé crée une nouvelle entrée sans modifier l
 
   await originalItem.locator("button", { hasText: "⎘" }).click();
 
-  // Nom pré-rempli, mode "nouveau trajet" (pas édition).
+  // Nom pré-rempli, mais en mode "nouveau trajet", pas en édition.
   await expect(page.locator("#save-route-name-input")).toHaveValue(`Copie de ${originalName}`);
   await expect(page.locator("#route-description-input")).toHaveValue("Description originale");
   await expect(page.locator("#save-route-btn")).toBeVisible();
   await expect(page.locator("#update-route-btn")).toHaveClass(/hidden/);
 
-  // Modifier un point avant de sauvegarder la copie : l'original ne doit pas en hériter.
+  // Modifier un point avant de sauvegarder la copie : l'original ne doit pas hériter de ce changement.
   await clickMapAt(page, 48.87, 2.36);
   await expect(page.locator("#waypoint-list li")).toHaveCount(3);
 

@@ -4,7 +4,7 @@ function speedColor(speed) {
   if (speed == null) return "#888888";
   if (speed <= 50) return "#2e7d32"; // vert
   if (speed <= 70) return "#f9a825"; // jaune/orange
-  return "#e64a19"; // orange foncé (ne devrait pas dépasser 80 grâce au filtre)
+  return "#e64a19"; // orange foncé — ce palier ne devrait jamais dépasser 80 km/h, le filtre l'exclut en amont
 }
 
 export class RouteLayer {
@@ -20,11 +20,11 @@ export class RouteLayer {
   }
 
   /**
-   * geometry_geojson: { type: "LineString", coordinates: [[lon, lat], ...] }
-   * maxSpeedBySegment: valeur de max_speed (ou null) pour chaque point du tracé
-   * legBoundaries: index de chaque waypoint demandé dans coordinates (cf. backend
-   *   route_enrichment.py) — permet à insertInteraction de déterminer entre quels
-   *   deux waypoints insérer un point glissé sur le tracé.
+   * geometry_geojson : { type: "LineString", coordinates: [[lon, lat], ...] }
+   * maxSpeedBySegment : max_speed (ou null) pour chaque point du tracé
+   * legBoundaries : index de chaque waypoint demandé dans coordinates (voir
+   *   backend/route_enrichment.py) — sert à insertInteraction pour déterminer
+   *   entre quels deux waypoints insérer un point glissé sur le tracé.
    */
   draw(geometryGeojson, maxSpeedBySegment, legBoundaries = []) {
     this.clear();

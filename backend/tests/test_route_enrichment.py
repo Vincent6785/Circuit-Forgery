@@ -9,8 +9,9 @@ def test_leg_boundaries_simple_case():
 
 
 def test_leg_boundaries_monotonic_cursor_handles_loop():
-    # Le trajet repasse près du point de départ (boucle) : le curseur ne doit
-    # jamais revenir en arrière même si un point plus proche existe avant lui.
+    # Trajet en boucle qui repasse près du point de départ : le curseur doit
+    # rester monotone et ne jamais reculer, même si un point plus proche se
+    # trouve avant lui dans la séquence.
     coordinates = [[0, 0], [1, 0], [2, 0], [1, 0.01], [0, 0.01]]
     snapped = [[0, 0], [2, 0], [0, 0.01]]
     boundaries = _leg_boundaries(coordinates, snapped)

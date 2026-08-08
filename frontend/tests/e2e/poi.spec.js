@@ -30,7 +30,7 @@ test("point d'intérêt : clic droit -> formulaire -> marqueur + liste -> suppre
   await expect(page.locator("#poi-list li")).toHaveCount(0);
   await expect(page.locator(".leaflet-marker-icon")).toHaveCount(0);
 
-  // Nettoyage de sécurité si l'assertion précédente avait échoué avant la suppression UI.
+  // Filet de sécurité si l'assertion précédente avait échoué avant que la suppression UI n'ait eu lieu.
   const remaining = await request.get("/api/poi").then((r) => r.json());
   for (const poi of remaining.filter((p) => p.name === "Station essence test")) {
     await request.delete(`/api/poi/${poi.id}`);

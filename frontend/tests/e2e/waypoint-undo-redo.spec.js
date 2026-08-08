@@ -87,7 +87,7 @@ test("Ctrl+Z annule l'ajout d'une zone à éviter comme une mutation de waypoint
 
   await page.keyboard.press("Control+z");
   await expect(page.locator("#avoid-zone-list li")).toHaveCount(0);
-  // Les waypoints, mutés avant la zone, ne sont pas affectés par cette annulation.
+  // Les waypoints, mutés avant la zone, ne sont pas concernés par cette annulation.
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
 
   await page.keyboard.press("Control+Shift+z");
@@ -104,16 +104,17 @@ test("annuler une mutation de waypoint après une zone restaure aussi la zone (h
   await page.locator("#avoid-zone-toggle-btn").click();
   await dragZone(page, 48.865, 2.325, 48.868, 2.328);
   await expect(page.locator("#avoid-zone-list li")).toHaveCount(1);
-  // Le mode dessin reste actif après une zone (permet d'en enchaîner
-  // plusieurs) : le désactiver avant de reprendre l'ajout normal de points.
+  // Le mode dessin reste actif après une zone, pour permettre d'en enchaîner
+  // plusieurs : il faut le désactiver explicitement avant de reprendre
+  // l'ajout normal de points.
   await page.locator("#avoid-zone-toggle-btn").click();
 
-  // Nouvelle mutation de waypoint après la zone.
+  // Nouvelle mutation de waypoint, postérieure à la zone.
   await clickMapAt(page, 48.87, 2.36);
   await expect(page.locator("#waypoint-list li")).toHaveCount(3);
 
-  // Un seul Ctrl+Z annule uniquement le 3e point (dernière mutation), la
-  // zone reste en place — l'historique respecte l'ordre chronologique réel.
+  // Un seul Ctrl+Z n'annule que le 3e point, la dernière mutation en date ;
+  // la zone reste en place — l'historique respecte l'ordre chronologique réel.
   await page.keyboard.press("Control+z");
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
   await expect(page.locator("#avoid-zone-list li")).toHaveCount(1);
@@ -133,7 +134,7 @@ test("Ctrl+Z n'agit pas au niveau app pendant la frappe dans un champ texte", as
 
   // Le formulaire d'édition reste ouvert et les waypoints n'ont pas changé :
   // Ctrl+Z n'a pas déclenché l'annulation au niveau de l'application pendant
-  // la frappe (seul l'éventuel undo natif du champ texte peut s'appliquer).
+  // la frappe — seul l'éventuel undo natif du champ texte a pu s'appliquer.
   await expect(firstItem.locator(".waypoint-edit-form")).toBeVisible();
   const waypointsAfter = await page.evaluate(() => window.__getWaypoints());
   expect(waypointsAfter).toEqual(waypointsBefore);

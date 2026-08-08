@@ -1,7 +1,8 @@
 /**
- * Simule un vrai clic souris sur la carte à une coordonnée géographique donnée,
- * via la projection Leaflet (window.__map exposé par main.js pour les tests).
- * Plus fidèle qu'appeler directement les fonctions internes de l'app.
+ * Simule un vrai clic souris sur la carte à une coordonnée géographique
+ * donnée, via la projection Leaflet (window.__map, exposé par main.js pour
+ * les tests). Plus fidèle que d'appeler directement les fonctions internes
+ * de l'app.
  */
 export async function clickMapAt(page, lat, lon) {
   const point = await page.evaluate(

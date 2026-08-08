@@ -10,9 +10,9 @@ _CACHE_TTL_S = 300
 
 
 class NominatimClient:
-    """Client pour l'API de recherche Nominatim (OpenStreetMap), avec respect de
-    leur politique d'usage : User-Agent identifiant, throttling (~1 req/s), et un
-    cache mémoire court pour éviter de répéter des requêtes identiques rapprochées."""
+    """Client de recherche Nominatim (OpenStreetMap), conforme à leur politique
+    d'usage : User-Agent identifiant, throttling à ~1 requête/s, et un cache
+    mémoire de courte durée pour éviter de répéter une requête identique."""
 
     def __init__(self):
         self._lock = asyncio.Lock()

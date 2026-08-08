@@ -100,7 +100,7 @@ test("une zone à éviter survit à la sauvegarde et au rechargement d'un trajet
   const created = routes.find((r) => r.name === name);
   expect(created.avoid_zones).toHaveLength(1);
 
-  // Rouvrir en édition doit restaurer la zone dans l'UI.
+  // Rouvrir ce trajet en édition doit restaurer la zone dans l'UI.
   await page.reload();
   await page
     .locator("#saved-routes-list li", { hasText: name })
@@ -120,8 +120,9 @@ test("un clic simple avec un rayon saisi crée une zone de ce rayon exact", asyn
   await page.fill("#avoid-zone-radius-input", "350");
   await page.locator("#avoid-zone-toggle-btn").click();
 
-  // Clic simple (pas de glisser) : dragZone(center, center) simule un
-  // mousedown/mouseup au même point, donc un rayon quasi nul sans le champ.
+  // Clic simple, sans glisser : dragZone(center, center) simule un
+  // mousedown/mouseup au même point, donc un rayon quasi nul en l'absence
+  // du champ rayon.
   await dragZone(page, 48.865, 2.325, 48.865, 2.325);
 
   await expect(page.locator("#avoid-zone-list li")).toHaveCount(1);

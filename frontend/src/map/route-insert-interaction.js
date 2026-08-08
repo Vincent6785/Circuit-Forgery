@@ -2,10 +2,11 @@ import L from "leaflet";
 
 /**
  * Glisser-déposer sur le tracé affiché pour insérer un nouveau waypoint entre
- * deux waypoints existants (comme Google Maps/Komoot). attachToSegment() est
- * appelé par RouteLayer pour chaque segment du tracé ; onInsert(legIndex, lat, lon)
- * est appelé au relâchement, legIndex désignant la paire de waypoints consécutifs
- * (waypoint[legIndex] -> waypoint[legIndex+1]) entre laquelle insérer le point.
+ * deux waypoints existants (comme Google Maps ou Komoot). RouteLayer appelle
+ * attachToSegment() pour chaque segment du tracé ; au relâchement,
+ * onInsert(legIndex, lat, lon) est appelé avec legIndex désignant la paire de
+ * waypoints consécutifs (waypoint[legIndex] -> waypoint[legIndex+1]) entre
+ * laquelle insérer le point.
  */
 export class RouteInsertInteraction {
   constructor(map, onInsert) {
@@ -52,7 +53,8 @@ export class RouteInsertInteraction {
     this._map.on("mouseup", onUp);
   }
 
-  /** Paire de waypoints consécutifs (index de leg) contenant l'index de coordonnée donné. */
+  /** Retrouve l'index de leg (paire de waypoints consécutifs) qui contient
+   * l'index de coordonnée donné. */
   _legIndexForCoordIndex(coordIndex) {
     let legIndex = 0;
     for (let i = 0; i < this._legBoundaries.length; i++) {

@@ -23,11 +23,11 @@ class Route(Base):
     geometry_geojson: Mapped[str] = mapped_column(Text, nullable=False)
     is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
-    # Nullable : renseignée uniquement lors d'une édition réelle du tracé
-    # (PUT /api/routes/{id} avec waypoints), pas au simple renommage/favori.
+    # Nullable — n'est renseignée que par une édition du tracé (PUT avec
+    # waypoints), pas par un simple renommage ou changement de favori.
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
-    # Nullable : absent pour les trajets créés avant cette fonctionnalité, ou
-    # simplement sans zone à éviter.
+    # Nullable — absent aussi bien pour les trajets créés avant l'existence
+    # des zones à éviter que pour ceux qui n'en ont simplement aucune.
     avoid_zones_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
 

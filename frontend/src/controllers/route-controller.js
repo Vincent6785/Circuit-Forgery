@@ -6,16 +6,16 @@ import { renderWaypointList } from "../ui/waypoint-list.js";
 import { clearDraft } from "../state/draft-storage.js";
 
 /**
- * Câble la sidebar "Trajet" : calcul/rendu du tracé courant, sauvegarde,
+ * Câble la sidebar "Trajet" : calcul et rendu du tracé courant, sauvegarde,
  * édition d'un trajet existant, effacement. Reçoit le store et les objets
- * carte déjà construits par main.js plutôt que de les recréer.
+ * carte déjà construits par main.js au lieu de les recréer ici.
  */
 export function initRouteController({ store, waypointManager, routeLayer }) {
-  // Garde-fou "dernier appel gagne" : plusieurs mutations rapprochées (ex.
-  // import GPX qui déclenche à la fois la notification automatique du store
-  // et un appel explicite pour séquencer un message post-recalcul) peuvent
-  // lancer deux calculs concurrents — seul le plus récent doit mettre à jour
-  // le DOM à sa résolution.
+  // Garde-fou "dernier appel gagne" : deux mutations rapprochées (par
+  // exemple un import GPX, qui déclenche à la fois la notification
+  // automatique du store et un appel explicite pour séquencer un message
+  // post-recalcul) peuvent lancer deux calculs concurrents — seul le plus
+  // récent des deux doit être autorisé à mettre à jour le DOM à sa résolution.
   let recomputeSeq = 0;
 
   async function recomputeAndRender(waypoints) {
@@ -193,9 +193,10 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
     );
   }
 
-  /** Comme enterEditMode, mais avec editingRouteId: null — "Sauvegarder" crée
-   * une nouvelle entrée au lieu de modifier l'original (nom pré-rempli pour
-   * inciter à le distinguer, mais reste éditable/vide comme un nouveau trajet). */
+  /** Identique à enterEditMode, mais avec editingRouteId: null : "Sauvegarder"
+   * crée alors une nouvelle entrée plutôt que de modifier l'original. Le nom
+   * est pré-rempli pour inciter à le distinguer, mais reste librement
+   * modifiable, comme pour n'importe quel nouveau trajet. */
   function duplicateRoute(route) {
     waypointManager.setPointsSilently(route.waypoints);
     routeLayer.draw(route.geometry_geojson, []);

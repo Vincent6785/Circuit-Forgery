@@ -2,7 +2,7 @@ import { searchAddress } from "../api/geocode.js";
 
 const DEBOUNCE_MS = 350;
 
-/** onSelect(lat, lon, label) est appelé au clic sur un résultat. */
+/** onSelect(lat, lon, label) est appelé quand l'utilisateur clique un résultat. */
 export function initAddressSearch(onSelect) {
   const input = document.getElementById("address-search-input");
   const results = document.getElementById("address-search-results");
@@ -28,7 +28,7 @@ export function initAddressSearch(onSelect) {
       } catch {
         return;
       }
-      if (seq !== requestSeq) return; // une frappe plus récente a déjà relancé une recherche
+      if (seq !== requestSeq) return; // une frappe plus récente a déjà lancé une recherche plus fraîche
       renderResults(items);
     }, DEBOUNCE_MS);
   });

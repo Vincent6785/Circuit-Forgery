@@ -20,7 +20,7 @@ import { initAvoidZoneController } from "./controllers/avoid-zone-controller.js"
 import { initRouteAlternatives } from "./ui/route-alternatives.js";
 
 const map = createMap("map");
-window.__map = map; // usage tests Playwright uniquement (latLngToContainerPoint pour simuler des clics)
+window.__map = map; // exposé uniquement pour Playwright (latLngToContainerPoint pour simuler des clics)
 
 const insertInteraction = new RouteInsertInteraction(map, (legIndex, lat, lon) => {
   waypointManager.insertPointAt(legIndex + 1, lat, lon);
@@ -28,16 +28,16 @@ const insertInteraction = new RouteInsertInteraction(map, (legIndex, lat, lon) =
 const routeLayer = new RouteLayer(map, insertInteraction);
 
 const store = createStore({
-  waypoints: [], // [{id, lat, lon}]
-  computedRoute: null, // ComputeRouteResponse | null
-  editingRouteId: null, // id du trajet sauvegardé en cours d'édition, ou null
-  avoidZones: [], // [{lat, lon, radiusM}]
+  waypoints: [], // liste de {id, lat, lon}
+  computedRoute: null, // ComputeRouteResponse, ou null tant qu'aucun trajet n'est calculé
+  editingRouteId: null, // id du trajet sauvegardé en cours d'édition, ou null hors édition
+  avoidZones: [], // liste de {lat, lon, radiusM}
 });
 
 const history = createHistory();
 const waypointManager = new WaypointManager(map, store, history);
-window.__getWaypoints = () => waypointManager.getPoints(); // usage tests Playwright uniquement
-window.__getAvoidZones = () => store.getState().avoidZones; // usage tests Playwright uniquement
+window.__getWaypoints = () => waypointManager.getPoints(); // exposé uniquement pour Playwright
+window.__getAvoidZones = () => store.getState().avoidZones; // exposé uniquement pour Playwright
 
 initDraftAutosave(store);
 
@@ -75,7 +75,7 @@ map.on("contextmenu", (e) => {
 
 refreshPoi();
 
-// Restauration du brouillon (trajet non sauvegardé perdu sinon au rechargement).
+// Restaure le brouillon local : sans ça, un trajet non sauvegardé serait perdu au rechargement.
 const draft = loadDraft();
 if (draft && draft.waypoints?.length > 0) {
   waypointManager.setPointsSilently(draft.waypoints);

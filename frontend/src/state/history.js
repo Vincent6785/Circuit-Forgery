@@ -1,10 +1,11 @@
 const MAX_HISTORY = 50;
 
-/** Pile undo/redo générique et bornée, agnostique du contenu snapshotté —
- * le caller (waypoints + zones à éviter, cf. markers.js/avoid-zone-controller.js)
- * fournit et reçoit des objets snapshot opaques, ce qui permet à plusieurs
- * sources de mutations indépendantes de partager un seul historique cohérent
- * (undo() restaure tout ce qui a été poussé ensemble, dans l'ordre). */
+/** Pile undo/redo générique et bornée, indifférente au contenu snapshotté :
+ * l'appelant (waypoints et zones à éviter, voir markers.js et
+ * avoid-zone-controller.js) fournit et reçoit des objets snapshot opaques.
+ * Cette neutralité permet à plusieurs sources de mutations indépendantes de
+ * partager un seul historique cohérent — undo() restaure toujours tout ce
+ * qui a été poussé ensemble, dans l'ordre. */
 export function createHistory() {
   let past = [];
   let future = [];
