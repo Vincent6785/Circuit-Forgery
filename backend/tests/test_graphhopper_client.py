@@ -48,6 +48,40 @@ async def test_route_uses_post_with_avoid_zones_and_merges_custom_model():
 
 
 @respx.mock
+async def test_route_uses_post_with_speed_limit_even_without_zones():
+    route = respx.post(f"{BASE_URL}/route").mock(return_value=httpx.Response(200, json={"paths": [_path()]}))
+    result = await _client().route([(0, 0), (1, 1)], speed_limit_kmh=60)
+    assert route.called
+    body = json.loads(route.calls.last.request.content)
+    assert body["custom_model"]["priority"] == [
+        {"if": "max_speed > 60 && max_speed < 1000", "multiply_by": "0"}
+    ]
+    assert result["distance"] == 1000.0
+
+
+@respx.mock
+async def test_route_ignores_speed_limit_at_default_stays_get():
+    route = respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(200, json={"paths": [_path()]}))
+    await _client().route([(0, 0), (1, 1)], speed_limit_kmh=80)
+    assert route.called
+
+
+@respx.mock
+async def test_route_switches_profile_for_no_speed_limit_and_stays_get():
+    route = respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(200, json={"paths": [_path()]}))
+    await _client().route([(0, 0), (1, 1)], no_speed_limit=True)
+    assert route.called
+    assert route.calls.last.request.url.params["profile"] == "moto_no_limit"
+
+
+@respx.mock
+async def test_route_no_speed_limit_ignores_speed_limit_kmh():
+    route = respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(200, json={"paths": [_path()]}))
+    await _client().route([(0, 0), (1, 1)], speed_limit_kmh=50, no_speed_limit=True)
+    assert route.called  # reste en GET : pas de custom_model, le seuil est ignoré
+
+
+@respx.mock
 async def test_route_maps_400_to_route_not_found():
     respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(400, json={"message": "no route"}))
     with pytest.raises(GraphHopperRouteNotFoundError):
@@ -75,6 +109,31 @@ async def test_route_round_trip_sends_algorithm_and_distance():
 
 
 @respx.mock
+async def test_route_round_trip_uses_post_with_speed_limit():
+    route = respx.post(f"{BASE_URL}/route").mock(
+        return_value=httpx.Response(200, json={"paths": [_path(distance=20000.0)]})
+    )
+    result = await _client().route_round_trip((48.85, 2.35), distance_m=20000, speed_limit_kmh=50)
+    assert route.called
+    body = json.loads(route.calls.last.request.content)
+    assert body["algorithm"] == "round_trip"
+    assert body["custom_model"]["priority"] == [
+        {"if": "max_speed > 50 && max_speed < 1000", "multiply_by": "0"}
+    ]
+    assert result["distance"] == 20000.0
+
+
+@respx.mock
+async def test_route_round_trip_switches_profile_for_no_speed_limit():
+    route = respx.get(f"{BASE_URL}/route").mock(
+        return_value=httpx.Response(200, json={"paths": [_path(distance=20000.0)]})
+    )
+    await _client().route_round_trip((48.85, 2.35), distance_m=20000, no_speed_limit=True)
+    assert route.called
+    assert route.calls.last.request.url.params["profile"] == "moto_no_limit"
+
+
+@respx.mock
 async def test_route_round_trip_maps_400_to_route_not_found():
     respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(400, json={"message": "no route"}))
     with pytest.raises(GraphHopperRouteNotFoundError):
@@ -92,3 +151,12 @@ async def test_route_alternatives_returns_all_paths():
     assert len(results) == 2
     assert [r["distance"] for r in results] == [1000.0, 1200.0]
     assert route.calls.last.request.url.params["algorithm"] == "alternative_route"
+
+
+@respx.mock
+async def test_route_alternatives_switches_profile_for_no_speed_limit():
+    route = respx.get(f"{BASE_URL}/route").mock(
+        return_value=httpx.Response(200, json={"paths": [_path(distance=1000.0)]})
+    )
+    await _client().route_alternatives([(0, 0), (1, 1)], no_speed_limit=True)
+    assert route.calls.last.request.url.params["profile"] == "moto_no_limit"

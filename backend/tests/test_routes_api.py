@@ -71,7 +71,7 @@ def _fake_path(distance=1000.0, coords=None):
 
 
 def test_round_trip_returns_sampled_waypoints(client, monkeypatch):
-    async def fake_round_trip(start, distance_m, seed=None, profile=None):
+    async def fake_round_trip(start, distance_m, seed=None, profile=None, speed_limit_kmh=None, no_speed_limit=False):
         return _fake_path(distance=20000.0)
 
     monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
@@ -88,7 +88,7 @@ def test_round_trip_returns_sampled_waypoints(client, monkeypatch):
 def test_round_trip_marks_simplified_when_dense_track_is_subsampled(client, monkeypatch):
     dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(500)]
 
-    async def fake_round_trip(start, distance_m, seed=None, profile=None):
+    async def fake_round_trip(start, distance_m, seed=None, profile=None, speed_limit_kmh=None, no_speed_limit=False):
         return _fake_path(distance=20000.0, coords=dense_coords)
 
     monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
@@ -105,7 +105,7 @@ def test_round_trip_marks_simplified_when_dense_track_is_subsampled(client, monk
 
 
 def test_round_trip_not_simplified_for_short_track(client, monkeypatch):
-    async def fake_round_trip(start, distance_m, seed=None, profile=None):
+    async def fake_round_trip(start, distance_m, seed=None, profile=None, speed_limit_kmh=None, no_speed_limit=False):
         return _fake_path(distance=1000.0)
 
     monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
@@ -122,10 +122,10 @@ def test_round_trip_reserves_headroom_under_max_waypoints(client, monkeypatch):
     # recalcul automatique sur /compute sans re-déclencher la même erreur.
     dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(500)]
 
-    async def fake_round_trip(start, distance_m, seed=None, profile=None):
+    async def fake_round_trip(start, distance_m, seed=None, profile=None, speed_limit_kmh=None, no_speed_limit=False):
         return _fake_path(distance=20000.0, coords=dense_coords)
 
-    async def fake_route(points, profile=None, avoid_zones=None):
+    async def fake_route(points, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False):
         return _fake_path(distance=20000.0, coords=[[2.35, 48.85], [2.36, 48.86]])
 
     monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
@@ -162,7 +162,7 @@ def test_round_trip_rejects_start_outside_france(client):
 
 
 def test_alternatives_returns_multiple_options(client, monkeypatch):
-    async def fake_alternatives(points, profile=None):
+    async def fake_alternatives(points, profile=None, no_speed_limit=False):
         return [_fake_path(distance=1000.0), _fake_path(distance=1200.0)]
 
     monkeypatch.setattr(routes_module.graphhopper_client, "route_alternatives", fake_alternatives)
@@ -206,3 +206,57 @@ def test_update_route_replaces_avoid_zones(client):
     )
     assert resp.status_code == 200
     assert resp.json()["avoid_zones"] == [{"lat": 48.86, "lon": 2.36, "radius_m": 1000}]
+
+
+def test_compute_route_rejects_speed_limit_below_minimum(client):
+    resp = client.post(
+        "/api/routes/compute",
+        json={
+            "waypoints": [{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}],
+            "speed_limit_kmh": 10,
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_compute_route_rejects_speed_limit_above_maximum(client):
+    resp = client.post(
+        "/api/routes/compute",
+        json={
+            "waypoints": [{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}],
+            "speed_limit_kmh": 90,
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_create_route_persists_speed_limit_settings(client):
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    payload["speed_limit_kmh"] = 60
+    created = client.post("/api/routes", json=payload).json()
+    assert created["speed_limit_kmh"] == 60
+    assert created["no_speed_limit"] is False
+
+    fetched = client.get(f"/api/routes/{created['id']}").json()
+    assert fetched["speed_limit_kmh"] == 60
+
+
+def test_create_route_defaults_no_speed_limit_settings(client):
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    created = client.post("/api/routes", json=payload).json()
+    assert created["speed_limit_kmh"] is None
+    assert created["no_speed_limit"] is False
+
+
+def test_update_route_replaces_speed_limit_settings(client):
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    created = client.post("/api/routes", json=payload).json()
+
+    resp = client.put(
+        f"/api/routes/{created['id']}",
+        json={"no_speed_limit": True, "speed_limit_kmh": None},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["no_speed_limit"] is True
+    assert body["speed_limit_kmh"] is None

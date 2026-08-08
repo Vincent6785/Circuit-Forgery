@@ -15,6 +15,24 @@
         Le tracé évite les axes &gt; 80 km/h.
       </p>
 
+      <div id="speed-limit-panel" class="panel">
+        <h2 id="speed-limit-heading">Limite de vitesse</h2>
+        <p class="hint">Par défaut : évite les axes signalés à plus de 80 km/h.</p>
+        <input
+          type="number"
+          id="speed-limit-input"
+          min="20"
+          max="80"
+          step="1"
+          value="80"
+          aria-labelledby="speed-limit-heading"
+        />
+        <label id="speed-limit-none-label">
+          <input type="checkbox" id="speed-limit-none-checkbox" />
+          Aucune limite
+        </label>
+      </div>
+
       <div id="address-search-panel" class="panel">
         <h2 id="address-search-heading">Rechercher une adresse</h2>
         <input

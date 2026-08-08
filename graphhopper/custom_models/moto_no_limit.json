@@ -1,0 +1,23 @@
+// Variante de moto_no_fast.json sans aucune exclusion de vitesse : même
+// pondération road_class (préférence aux petites routes), mais une route
+// rapide reste utilisable en dernier recours plutôt qu'interdite. Sert de
+// profil "Aucune limite" côté UI — le seuil de max_speed lui-même ne peut
+// pas être retiré par requête (custom_model fusionné, jamais annulable, cf.
+// backend/app/services/avoid_zone.py::build_custom_model), d'où ce profil
+// séparé plutôt qu'un simple paramètre.
+{
+  "distance_influence": 30,
+  "priority": [
+    { "if": "!car_access", "multiply_by": "0" },
+
+    { "if": "road_class == SECONDARY", "multiply_by": "1.1" },
+    { "else_if": "road_class == TERTIARY", "multiply_by": "1.2" },
+    { "else_if": "road_class == UNCLASSIFIED || road_class == RESIDENTIAL", "multiply_by": "1.3" },
+
+    { "if": "road_class == MOTORWAY || road_class == TRUNK", "multiply_by": "0.02" },
+    { "else_if": "road_class == PRIMARY", "multiply_by": "0.1" }
+  ],
+  "speed": [
+    { "if": "true", "limit_to": "car_average_speed" }
+  ]
+}

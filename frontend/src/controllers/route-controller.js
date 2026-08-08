@@ -28,7 +28,8 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
       return;
     }
     try {
-      const result = await computeRoute(waypoints, store.getState().avoidZones);
+      const { avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
+      const result = await computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit);
       if (seq !== recomputeSeq) return;
       hideRouteError();
       routeLayer.draw(result.geometry_geojson, result.max_speed_by_segment, result.leg_boundaries);
@@ -84,13 +85,16 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
 
   document.getElementById("clear-route-btn").addEventListener("click", () => {
     waypointManager.clear();
-    store.setState({ editingRouteId: null, avoidZones: [] }, { silent: true });
+    store.setState(
+      { editingRouteId: null, avoidZones: [], speedLimitKmh: null, noSpeedLimit: false },
+      { silent: true }
+    );
     document.getElementById("route-description-input").value = "";
     clearDraft();
   });
 
   document.getElementById("save-route-btn").addEventListener("click", async (e) => {
-    const { waypoints, computedRoute, avoidZones } = store.getState();
+    const { waypoints, computedRoute, avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
     if (!computedRoute) return;
     const nameInput = document.getElementById("save-route-name-input");
     const descriptionInput = document.getElementById("route-description-input");
@@ -110,6 +114,8 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
         duration_s: computedRoute.duration_s,
         geometry_geojson: computedRoute.geometry_geojson,
         avoid_zones: toApiAvoidZones(avoidZones),
+        speed_limit_kmh: speedLimitKmh,
+        no_speed_limit: noSpeedLimit,
       });
       hideRouteError();
       nameInput.value = "";
@@ -123,7 +129,7 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
   });
 
   document.getElementById("update-route-btn").addEventListener("click", async (e) => {
-    const { waypoints, computedRoute, editingRouteId, avoidZones } = store.getState();
+    const { waypoints, computedRoute, editingRouteId, avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
     if (!computedRoute || editingRouteId === null) return;
     const btn = e.currentTarget;
     btn.disabled = true;
@@ -135,6 +141,8 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
         duration_s: computedRoute.duration_s,
         geometry_geojson: computedRoute.geometry_geojson,
         avoid_zones: toApiAvoidZones(avoidZones),
+        speed_limit_kmh: speedLimitKmh,
+        no_speed_limit: noSpeedLimit,
       });
       hideRouteError();
       store.setState({ editingRouteId: null }, { silent: true });
@@ -148,7 +156,10 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
 
   document.getElementById("cancel-edit-btn").addEventListener("click", () => {
     waypointManager.clear();
-    store.setState({ editingRouteId: null, avoidZones: [] }, { silent: true });
+    store.setState(
+      { editingRouteId: null, avoidZones: [], speedLimitKmh: null, noSpeedLimit: false },
+      { silent: true }
+    );
     document.getElementById("route-description-input").value = "";
     clearDraft();
   });
@@ -168,6 +179,8 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
         },
         editingRouteId: null,
         avoidZones: fromApiAvoidZones(route.avoid_zones),
+        speedLimitKmh: route.speed_limit_kmh ?? null,
+        noSpeedLimit: route.no_speed_limit || false,
       },
       { silent: true }
     );
@@ -188,6 +201,8 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
         },
         editingRouteId: route.id,
         avoidZones: fromApiAvoidZones(route.avoid_zones),
+        speedLimitKmh: route.speed_limit_kmh ?? null,
+        noSpeedLimit: route.no_speed_limit || false,
       },
       { silent: true }
     );
@@ -213,6 +228,8 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
         },
         editingRouteId: null,
         avoidZones: fromApiAvoidZones(route.avoid_zones),
+        speedLimitKmh: route.speed_limit_kmh ?? null,
+        noSpeedLimit: route.no_speed_limit || false,
       },
       { silent: true }
     );

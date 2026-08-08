@@ -45,6 +45,8 @@ def _route_to_out(route: Route) -> RouteOut:
         created_at=route.created_at,
         updated_at=route.updated_at,
         avoid_zones=[AvoidZone(**z) for z in json.loads(route.avoid_zones_json)] if route.avoid_zones_json else [],
+        speed_limit_kmh=route.speed_limit_kmh,
+        no_speed_limit=route.no_speed_limit,
     )
 
 
@@ -54,7 +56,12 @@ async def compute_route(body: ComputeRouteRequest):
     validate_avoid_zones(body.avoid_zones)
     points = [(wp.lat, wp.lon) for wp in body.waypoints]
     try:
-        path = await graphhopper_client.route(points, avoid_zones=body.avoid_zones or None)
+        path = await graphhopper_client.route(
+            points,
+            avoid_zones=body.avoid_zones or None,
+            speed_limit_kmh=body.speed_limit_kmh,
+            no_speed_limit=body.no_speed_limit,
+        )
     except GraphHopperRouteNotFoundError as exc:
         raise HTTPException(422, str(exc)) from exc
     except GraphHopperUnavailableError as exc:
@@ -69,7 +76,11 @@ async def compute_round_trip(body: RoundTripRequest):
         raise HTTPException(400, f"Distance de circuit trop grande (max {settings.max_round_trip_distance_m} m)")
     try:
         path = await graphhopper_client.route_round_trip(
-            (body.start.lat, body.start.lon), body.distance_m, body.seed
+            (body.start.lat, body.start.lon),
+            body.distance_m,
+            body.seed,
+            speed_limit_kmh=body.speed_limit_kmh,
+            no_speed_limit=body.no_speed_limit,
         )
     except GraphHopperRouteNotFoundError as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -93,7 +104,7 @@ async def compute_alternatives(body: AlternativesRequest):
     validate_waypoints(body.waypoints)
     points = [(wp.lat, wp.lon) for wp in body.waypoints]
     try:
-        paths = await graphhopper_client.route_alternatives(points)
+        paths = await graphhopper_client.route_alternatives(points, no_speed_limit=body.no_speed_limit)
     except GraphHopperRouteNotFoundError as exc:
         raise HTTPException(422, str(exc)) from exc
     except GraphHopperUnavailableError as exc:
@@ -121,6 +132,8 @@ def create_route(body: RouteCreate, db: Session = Depends(get_db)):
         duration_s=body.duration_s,
         geometry_geojson=json.dumps(body.geometry_geojson),
         avoid_zones_json=json.dumps([z.model_dump() for z in body.avoid_zones]) if body.avoid_zones else None,
+        speed_limit_kmh=body.speed_limit_kmh,
+        no_speed_limit=body.no_speed_limit,
     )
     db.add(route)
     db.commit()
@@ -157,6 +170,13 @@ def update_route(route_id: int, body: RouteUpdate, db: Session = Depends(get_db)
     if body.avoid_zones is not None:
         validate_avoid_zones(body.avoid_zones)
         route.avoid_zones_json = json.dumps([z.model_dump() for z in body.avoid_zones]) if body.avoid_zones else None
+    # no_speed_limit sert de marqueur "ce sous-groupe de champs a été fourni" :
+    # les deux réglages forment une paire cohérente (cf. RouteUpdate), mise à
+    # jour ensemble plutôt que de tenter de distinguer un speed_limit_kmh
+    # explicitement remis à None d'un champ simplement absent de la requête.
+    if body.no_speed_limit is not None:
+        route.no_speed_limit = body.no_speed_limit
+        route.speed_limit_kmh = body.speed_limit_kmh
     db.commit()
     db.refresh(route)
     return _route_to_out(route)

@@ -17,6 +17,7 @@ import { initRouteController } from "./controllers/route-controller.js";
 import { initGpxController } from "./controllers/gpx-controller.js";
 import { initRoundTripController } from "./controllers/round-trip-controller.js";
 import { initAvoidZoneController } from "./controllers/avoid-zone-controller.js";
+import { initSpeedLimitController } from "./controllers/speed-limit-controller.js";
 import { initRouteAlternatives } from "./ui/route-alternatives.js";
 
 const map = createMap("map");
@@ -32,12 +33,18 @@ const store = createStore({
   computedRoute: null, // ComputeRouteResponse, ou null tant qu'aucun trajet n'est calculé
   editingRouteId: null, // id du trajet sauvegardé en cours d'édition, ou null hors édition
   avoidZones: [], // liste de {lat, lon, radiusM}
+  speedLimitKmh: null, // seuil personnalisé (20-80), ou null = défaut du profil (80)
+  noSpeedLimit: false, // true = profil sans exclusion de vitesse
 });
 
 const history = createHistory();
 const waypointManager = new WaypointManager(map, store, history);
 window.__getWaypoints = () => waypointManager.getPoints(); // exposé uniquement pour Playwright
 window.__getAvoidZones = () => store.getState().avoidZones; // exposé uniquement pour Playwright
+window.__getSpeedLimit = () => ({
+  speedLimitKmh: store.getState().speedLimitKmh,
+  noSpeedLimit: store.getState().noSpeedLimit,
+}); // exposé uniquement pour Playwright
 
 initDraftAutosave(store);
 
@@ -45,6 +52,7 @@ const { recomputeAndRender } = initRouteController({ store, waypointManager, rou
 initGpxController({ store, waypointManager, recomputeAndRender });
 initRoundTripController({ map, store, waypointManager, recomputeAndRender });
 initAvoidZoneController({ map, store, waypointManager, history });
+initSpeedLimitController({ store });
 initRouteAlternatives({ store, routeLayer });
 
 initAddressSearch((lat, lon) => {
@@ -79,7 +87,14 @@ refreshPoi();
 const draft = loadDraft();
 if (draft && draft.waypoints?.length > 0) {
   waypointManager.setPointsSilently(draft.waypoints);
-  store.setState({ avoidZones: draft.avoidZones || [] }, { silent: true });
+  store.setState(
+    {
+      avoidZones: draft.avoidZones || [],
+      speedLimitKmh: draft.speedLimitKmh ?? null,
+      noSpeedLimit: draft.noSpeedLimit || false,
+    },
+    { silent: true }
+  );
   if (draft.computedRoute) {
     routeLayer.draw(
       draft.computedRoute.geometry_geojson,

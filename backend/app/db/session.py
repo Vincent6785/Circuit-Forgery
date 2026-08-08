@@ -36,6 +36,10 @@ def _apply_additive_migrations() -> None:
             conn.execute(text("ALTER TABLE routes ADD COLUMN updated_at DATETIME"))
         if "avoid_zones_json" not in existing_columns:
             conn.execute(text("ALTER TABLE routes ADD COLUMN avoid_zones_json TEXT"))
+        if "speed_limit_kmh" not in existing_columns:
+            conn.execute(text("ALTER TABLE routes ADD COLUMN speed_limit_kmh FLOAT"))
+        if "no_speed_limit" not in existing_columns:
+            conn.execute(text("ALTER TABLE routes ADD COLUMN no_speed_limit BOOLEAN NOT NULL DEFAULT 0"))
 
 
 def get_db() -> Session:

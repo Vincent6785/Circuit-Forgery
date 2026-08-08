@@ -9,14 +9,19 @@ graphhopper:
       custom_model_files: [car_default.json]
     - name: moto_no_fast
       custom_model_files: [moto_no_fast.json]
+    - name: moto_no_limit
+      custom_model_files: [moto_no_limit.json]
 
   profiles_ch:
     - profile: car
 
-  # moto_no_fast n'est pas en CH (Contraction Hierarchies figerait le custom_model à l'import) :
-  # LM (Landmarks) conserve un temps de réponse correct tout en restant flexible.
+  # moto_no_fast et moto_no_limit ne sont pas en CH (Contraction Hierarchies figerait
+  # le custom_model à l'import) : LM (Landmarks) conserve un temps de réponse correct
+  # tout en restant flexible, notamment pour fusionner un custom_model par requête
+  # (zones à éviter, seuil de vitesse personnalisé).
   profiles_lm:
     - profile: moto_no_fast
+    - profile: moto_no_limit
 
   graph.encoded_values: car_access, car_average_speed, road_access, road_class, max_speed
 

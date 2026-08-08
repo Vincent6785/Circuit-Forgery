@@ -78,21 +78,29 @@ class GraphHopperClient:
         points: list[tuple[float, float]],
         profile: Optional[str] = None,
         avoid_zones: Optional[list[AvoidZone]] = None,
+        speed_limit_kmh: Optional[float] = None,
+        no_speed_limit: bool = False,
     ) -> dict:
         if len(points) < 2:
             raise GraphHopperRouteNotFoundError("Au moins 2 points sont requis pour calculer un itinéraire")
 
-        profile_name = profile or settings.graphhopper_profile
+        # "Aucune limite" bascule de profil (graphhopper_no_limit_profile n'a
+        # aucune règle de vitesse) plutôt que de tenter de lever la règle du
+        # profil courant par custom_model — impossible, cf. avoid_zone.py.
+        profile_name = settings.graphhopper_no_limit_profile if no_speed_limit else (profile or settings.graphhopper_profile)
+        # Un seuil personnalisé ne resserre que si en-dessous du défaut du
+        # profil (80) ; à 80 ou au-dessus, la règle serait redondante.
+        tightened_speed_limit = speed_limit_kmh if (speed_limit_kmh is not None and speed_limit_kmh < 80 and not no_speed_limit) else None
 
         async with httpx.AsyncClient(timeout=30) as client:
             try:
-                if avoid_zones:
-                    # Une zone à éviter nécessite un corps JSON (custom_model) :
-                    # POST au lieu du GET utilisé pour le cas courant sans zone.
-                    # Vérifié empiriquement que ce custom_model se fusionne côté
-                    # GraphHopper avec celui du profil moto_no_fast plutôt que
-                    # de le remplacer — le filtre anti-80km/h reste actif en
-                    # plus de l'exclusion de zone.
+                if avoid_zones or tightened_speed_limit is not None:
+                    # Zones à éviter et/ou seuil resserré : nécessitent un corps
+                    # JSON (custom_model), donc POST plutôt que le GET utilisé
+                    # pour le cas courant. Vérifié empiriquement que ce
+                    # custom_model se fusionne côté GraphHopper avec celui du
+                    # profil plutôt que de le remplacer — le filtre du profil
+                    # reste actif en plus de ces règles supplémentaires.
                     body = {
                         "points": [[lon, lat] for lat, lon in points],
                         "profile": profile_name,
@@ -100,7 +108,7 @@ class GraphHopperClient:
                         "ch.disable": True,
                         "details": ["max_speed", "road_class"],
                         "locale": "fr",
-                        "custom_model": build_custom_model(avoid_zones),
+                        "custom_model": build_custom_model(avoid_zones or [], tightened_speed_limit),
                     }
                     resp = await client.post(f"{self._base_url}/route", json=body)
                 else:
@@ -108,9 +116,9 @@ class GraphHopperClient:
                         "point": [f"{lat},{lon}" for lat, lon in points],
                         "profile": profile_name,
                         "points_encoded": "false",
-                        # moto_no_fast n'a pas de préparation CH — figée à
-                        # l'import pour un custom_model — donc CH doit être
-                        # désactivé pour que GraphHopper retombe sur sa
+                        # moto_no_fast/moto_no_limit n'ont pas de préparation CH —
+                        # figée à l'import pour un custom_model — donc CH doit
+                        # être désactivé pour que GraphHopper retombe sur sa
                         # préparation LM.
                         "ch.disable": "true",
                         "details": ["max_speed", "road_class"],
@@ -128,24 +136,37 @@ class GraphHopperClient:
         distance_m: float,
         seed: Optional[int] = None,
         profile: Optional[str] = None,
+        speed_limit_kmh: Optional[float] = None,
+        no_speed_limit: bool = False,
     ) -> dict:
         lat, lon = start
-        params = {
-            "point": f"{lat},{lon}",
-            "profile": profile or settings.graphhopper_profile,
-            "points_encoded": "false",
-            "ch.disable": "true",
+        profile_name = settings.graphhopper_no_limit_profile if no_speed_limit else (profile or settings.graphhopper_profile)
+        tightened_speed_limit = speed_limit_kmh if (speed_limit_kmh is not None and speed_limit_kmh < 80 and not no_speed_limit) else None
+
+        base = {
+            "profile": profile_name,
+            "points_encoded": False,
+            "ch.disable": True,
             "algorithm": "round_trip",
             "round_trip.distance": distance_m,
             "details": ["max_speed", "road_class"],
             "locale": "fr",
         }
         if seed is not None:
-            params["round_trip.seed"] = seed
+            base["round_trip.seed"] = seed
 
         async with httpx.AsyncClient(timeout=30) as client:
             try:
-                resp = await client.get(f"{self._base_url}/route", params=params)
+                if tightened_speed_limit is not None:
+                    # Comme route() : un seuil resserré nécessite un custom_model,
+                    # donc un corps JSON. Vérifié empiriquement que round_trip
+                    # (contrairement à alternative_route) accepte bien un
+                    # custom_model combiné.
+                    body = {**base, "point": f"{lat},{lon}", "custom_model": build_custom_model([], tightened_speed_limit)}
+                    resp = await client.post(f"{self._base_url}/route", json=body)
+                else:
+                    params = {**base, "point": f"{lat},{lon}", "points_encoded": "false", "ch.disable": "true"}
+                    resp = await client.get(f"{self._base_url}/route", params=params)
             except httpx.HTTPError as exc:
                 raise GraphHopperUnavailableError(f"GraphHopper injoignable: {exc}") from exc
 
@@ -155,10 +176,15 @@ class GraphHopperClient:
         self,
         points: list[tuple[float, float]],
         profile: Optional[str] = None,
+        no_speed_limit: bool = False,
     ) -> list[dict]:
+        # Un simple changement de profil (pas de custom_model) reste compatible
+        # avec alternative_route — seul un custom_model par requête ne l'est pas
+        # (cf. ui/route-alternatives.js, incompatibilité vérifiée empiriquement).
+        profile_name = settings.graphhopper_no_limit_profile if no_speed_limit else (profile or settings.graphhopper_profile)
         params = {
             "point": [f"{lat},{lon}" for lat, lon in points],
-            "profile": profile or settings.graphhopper_profile,
+            "profile": profile_name,
             "points_encoded": "false",
             "ch.disable": "true",
             "algorithm": "alternative_route",

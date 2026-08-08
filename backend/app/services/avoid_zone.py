@@ -1,4 +1,5 @@
 import math
+from typing import Optional
 
 from app.schemas.route import AvoidZone
 
@@ -21,11 +22,15 @@ def circle_to_polygon(lat: float, lon: float, radius_m: float, n: int = 24) -> l
     return coords
 
 
-def build_custom_model(avoid_zones: list[AvoidZone]) -> dict:
-    """Construit un `custom_model` GraphHopper qui exclut chaque zone. Ce
-    custom_model se fusionne côté GraphHopper avec celui du profil de base
-    plutôt que de le remplacer — vérifié empiriquement que le filtre
-    anti-80km/h du profil reste actif en plus de l'exclusion."""
+def build_custom_model(avoid_zones: list[AvoidZone], speed_limit_kmh: Optional[float] = None) -> dict:
+    """Construit un `custom_model` GraphHopper qui exclut chaque zone et,
+    optionnellement, resserre le seuil de vitesse en dessous de celui du
+    profil de base. Ce custom_model se fusionne côté GraphHopper avec celui
+    du profil plutôt que de le remplacer — vérifié empiriquement que le
+    filtre anti-80km/h du profil reste actif en plus de ces règles, et
+    qu'une règle envoyée ici ne peut donc qu'ajouter une restriction, jamais
+    lever celle du profil (une exclusion à 0 reste à 0 quel que soit ce qui
+    est multiplié ensuite)."""
     areas = {}
     priority_rules = []
     for i, zone in enumerate(avoid_zones):
@@ -38,4 +43,6 @@ def build_custom_model(avoid_zones: list[AvoidZone]) -> dict:
             },
         }
         priority_rules.append({"if": f"in_{area_id}", "multiply_by": "0"})
+    if speed_limit_kmh is not None:
+        priority_rules.append({"if": f"max_speed > {speed_limit_kmh} && max_speed < 1000", "multiply_by": "0"})
     return {"areas": areas, "priority": priority_rules}

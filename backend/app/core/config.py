@@ -4,6 +4,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     graphhopper_url: str = "http://graphhopper:8989"
     graphhopper_profile: str = "moto_no_fast"
+    # Profil sans exclusion de vitesse (graphhopper/custom_models/moto_no_limit.json),
+    # utilisé quand l'utilisateur désactive la limite depuis l'UI — un seuil ne peut
+    # pas être retiré par requête, cf. services/avoid_zone.py::build_custom_model.
+    graphhopper_no_limit_profile: str = "moto_no_limit"
     database_path: str = "/data/circuit-forgery.db"
 
     # Cadre approximatif de la France métropolitaine et de la Corse : sert à

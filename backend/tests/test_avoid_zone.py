@@ -46,3 +46,20 @@ def test_build_custom_model_structure():
 def test_build_custom_model_empty_list():
     model = build_custom_model([])
     assert model == {"areas": {}, "priority": []}
+
+
+def test_build_custom_model_with_speed_limit_only():
+    model = build_custom_model([], speed_limit_kmh=60)
+    assert model == {
+        "areas": {},
+        "priority": [{"if": "max_speed > 60 && max_speed < 1000", "multiply_by": "0"}],
+    }
+
+
+def test_build_custom_model_with_zones_and_speed_limit():
+    zones = [AvoidZone(lat=48.85, lon=2.35, radius_m=500)]
+    model = build_custom_model(zones, speed_limit_kmh=50)
+    assert model["priority"] == [
+        {"if": "in_avoid_0", "multiply_by": "0"},
+        {"if": "max_speed > 50 && max_speed < 1000", "multiply_by": "0"},
+    ]

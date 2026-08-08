@@ -61,8 +61,9 @@ service cloud.
   simplifiée du tracé réel calculé par GraphHopper.
 - **Itinéraires alternatifs** : pour un trajet à exactement 2 points
   (départ/arrivée), jusqu'à 3 tracés distincts proposés au choix.
-  Désactivé tant qu'une zone à éviter est active (voir
-  [Limitations connues](#limitations-connues)).
+  Désactivé tant qu'une zone à éviter ou une limite de vitesse
+  personnalisée est active (voir [Limitations connues](#limitations-connues)) ;
+  "Aucune limite" seule reste compatible.
 
 ### Contraintes de trajet
 
@@ -73,6 +74,14 @@ service cloud.
   simple tap/clic, en complément du réglage visuel au glisser. Les zones
   actives sont listées, retirables individuellement, et persistées avec un
   trajet sauvegardé.
+- **Limite de vitesse personnalisable** : le seuil de 80 km/h peut être
+  abaissé (20 à 80 km/h) depuis le panneau "Limite de vitesse", ou
+  entièrement désactivé via la case "Aucune limite". Recalcule
+  automatiquement le trajet en cours, et se sauvegarde avec un trajet
+  comme les zones à éviter. Voir
+  [Limitations connues](#limitations-connues) pour ce qui n'est
+  volontairement pas possible (relever le seuil au-dessus de 80 à une
+  valeur précise).
 
 ### Sauvegarde et partage
 
@@ -108,10 +117,28 @@ Ces limites sont vérifiées et documentées, pas des oublis :
 - **Alternatives limitées à 2 points** — GraphHopper `alternative_route`
   n'a de sens visuel clair que pour un trajet départ/arrivée simple, pas
   pour un trajet à étapes. Elles sont aussi désactivées dès qu'une zone à
-  éviter est active : vérifié empiriquement que GraphHopper ignore
-  silencieusement `algorithm=alternative_route` dès que `custom_model`
-  (nécessaire pour exclure une zone) est présent dans la requête — combiner
-  les deux renverrait un unique tracé présenté à tort comme "alternatives".
+  éviter ou un seuil de vitesse personnalisé est actif : vérifié
+  empiriquement que GraphHopper ignore silencieusement
+  `algorithm=alternative_route` dès qu'un `custom_model` (nécessaire pour
+  exclure une zone ou resserrer le seuil) est présent dans la requête —
+  combiner les deux renverrait un unique tracé présenté à tort comme
+  "alternatives". "Aucune limite" reste compatible : c'est un simple
+  changement de profil, pas un `custom_model` par requête.
+- **Le seuil de vitesse ne peut être qu'abaissé, pas relevé à une valeur
+  précise** — un `custom_model` envoyé par requête se fusionne avec celui
+  du profil de base mais ne peut jamais l'annuler (`multiply_by: 0` reste
+  à 0 quoi que la requête ajoute par-dessus ; vérifié empiriquement : un
+  trajet forcé à emprunter le Pont de Normandie, exclu par `max_speed > 80`,
+  reste à 91 km de détour même avec un custom_model qui tente explicitement
+  de neutraliser cette règle). Relever la limite au-delà de 80 nécessite
+  donc un profil GraphHopper distinct, préparé à l'avance et sans cette
+  règle (`moto_no_limit`, voir [Architecture](#architecture)) — d'où le
+  choix d'un simple bouton "Aucune limite" plutôt que d'accepter n'importe
+  quelle valeur au-dessus de 80, ce qui aurait exigé un profil par palier.
+  Avec "Aucune limite", les grands axes restent fortement pénalisés (même
+  pondération `road_class` que `moto_no_fast`) : ils redeviennent
+  utilisables quand ils sont la seule option raisonnable, sans devenir
+  l'itinéraire le plus direct pour autant.
 - **Zones à éviter absentes du GPX** — aucune représentation standard pour
   ça dans ce format ; seuls les waypoints et le tracé sont exportés/importés.
 - **Insertion sur le tracé sans équivalent tactile** — glisser un point sur
@@ -131,12 +158,18 @@ Trois services Docker, orchestrés par `docker-compose.yml` :
 ```
 
 - **`graphhopper/`** — instance GraphHopper auto-hébergée, graphe construit
-  à partir de l'extrait OSM France (`data/osm/`). Le profil custom
-  `moto_no_fast` (`graphhopper/custom_models/moto_no_fast.json`) exclut les
-  routes dont la vitesse maximale signalée dépasse 80 km/h — c'est le cœur
-  du filtrage. N'est **jamais** exposé au réseau local : le port publié
-  (8989) est lié à `127.0.0.1` uniquement ; le backend l'atteint via le
-  réseau interne docker-compose.
+  à partir de l'extrait OSM France (`data/osm/`). Trois profils : `car`
+  (référence, sans caractère moto, préparé en CH) ; `moto_no_fast`
+  (`custom_models/moto_no_fast.json`), qui exclut les routes dont la
+  vitesse maximale signalée dépasse 80 km/h — le cœur du filtrage, profil
+  par défaut ; `moto_no_limit` (`custom_models/moto_no_limit.json`),
+  identique à `moto_no_fast` mais sans cette exclusion, utilisé quand
+  l'utilisateur désactive la limite depuis l'UI. `moto_no_fast` et
+  `moto_no_limit` sont préparés en LM (pas CH), ce qui permet de leur
+  envoyer un `custom_model` par requête (zones à éviter, seuil de vitesse
+  personnalisé) sans reconstruire le graphe. GraphHopper n'est **jamais**
+  exposé au réseau local : le port publié (8989) est lié à `127.0.0.1`
+  uniquement ; le backend l'atteint via le réseau interne docker-compose.
 - **`backend/`** — API FastAPI qui sert de proxy/enrichissement vers
   GraphHopper (calcul d'itinéraire, alternatives, circuits en boucle,
   zones à éviter, import/export GPX, géocodage via Nominatim) et persiste
@@ -181,6 +214,7 @@ ajuster :
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `CF_GRAPHHOPPER_URL` | `http://graphhopper:8989` | URL interne de l'instance GraphHopper (déjà fixée par `docker-compose.yml`) |
+| `CF_GRAPHHOPPER_NO_LIMIT_PROFILE` | `moto_no_limit` | Profil GraphHopper utilisé pour "Aucune limite" (voir Architecture) |
 | `CF_DATABASE_PATH` | `/data/circuit-forgery.db` | Chemin du fichier SQLite (monté sur `./backend/data`) |
 | `CF_MAX_WAYPOINTS` | `20` | Nombre maximal de points par trajet (protège la complexité des requêtes GraphHopper) |
 | `CF_MAX_ROUND_TRIP_DISTANCE_M` | `500000` | Distance cible maximale pour un circuit en boucle généré |
@@ -281,7 +315,7 @@ consciemment.
 
 ## Points de vigilance
 
-### Modifier `moto_no_fast.json` nécessite un réimport complet
+### Modifier ou ajouter un profil nécessite un réimport complet
 
 GraphHopper marque les sous-réseaux non connectés
 (`PrepareRoutingSubnetworks`) et prépare les landmarks (LM) **pour la
@@ -289,8 +323,21 @@ formule de pondération exacte du custom model au moment de l'import**, et
 persiste ce marquage dans `graph-cache`. Modifier
 `graphhopper/custom_models/moto_no_fast.json` sans reconstruire le graphe
 peut laisser GraphHopper utiliser un graphe dont la connectivité a été
-calculée pour l'ancienne version du modèle. Après toute modification de ce
-fichier :
+calculée pour l'ancienne version du modèle.
+
+**Vérifié empiriquement en ajoutant le profil `moto_no_limit`** : ce n'est
+pas propre à la modification d'un profil existant — *ajouter* un profil à
+`config.yml` sans reconstruire échoue tout aussi sec, GraphHopper refusant
+carrément de démarrer :
+```
+java.lang.IllegalStateException: Profiles do not match:
+Graphhopper config: car|...,moto_no_fast|...,moto_no_limit|...
+Graph: car|...,moto_no_fast|...
+Change configuration to match the graph or delete /graph-cache/
+```
+Le conteneur part alors en boucle de redémarrage jusqu'à ce que la
+configuration soit alignée avec le graphe déjà importé. Après toute
+modification ou ajout de profil :
 
 ```bash
 docker compose down
@@ -358,7 +405,11 @@ complet trajets et POI, persistance après redémarrage du conteneur
 backend, accessibilité LAN du backend (`ss -tlnp` + requête depuis l'IP LAN
 de la machine), non-exposition de GraphHopper hors loopback, et parcours
 utilisateur complet dans un vrai navigateur (clic carte → calcul →
-sauvegarde → rechargement, y compris les cas d'erreur de routage).
+sauvegarde → rechargement, y compris les cas d'erreur de routage). Limite
+de vitesse personnalisable vérifiée contre un cas réel concret (Pont de
+Normandie, `max_speed > 80` donc exclu par défaut) : 91 km de détour par
+défaut, ~70 km avec "Aucune limite" une fois le profil `moto_no_limit`
+importé et vérifié fonctionnel.
 
 **Non vérifié dans cet environnement** : l'accès depuis un second appareil
 physique du LAN (un seul appareil disponible pour les vérifications) —

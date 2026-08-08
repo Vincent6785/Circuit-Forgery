@@ -21,6 +21,11 @@ class AvoidZone(BaseModel):
 class ComputeRouteRequest(BaseModel):
     waypoints: list[Waypoint] = Field(min_length=2)
     avoid_zones: list[AvoidZone] = []
+    # None = comportement par défaut du profil (80 km/h). Une valeur ne peut
+    # qu'abaisser ce seuil (20 à 80) : le relever nécessite no_speed_limit,
+    # cf. services/avoid_zone.py::build_custom_model pour la raison.
+    speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
+    no_speed_limit: bool = False
 
 
 class ComputeRouteResponse(BaseModel):
@@ -45,10 +50,16 @@ class RoundTripRequest(BaseModel):
     start: Waypoint
     distance_m: float = Field(gt=0)
     seed: Optional[int] = None
+    speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
+    no_speed_limit: bool = False
 
 
 class AlternativesRequest(BaseModel):
     waypoints: list[Waypoint] = Field(min_length=2, max_length=2)
+    # Un seuil personnalisé (custom_model) est incompatible avec alternative_route
+    # (cf. ui/route-alternatives.js) : seul le changement de profil "Aucune limite"
+    # est proposé ici, le seuil resserré reste bloqué côté frontend.
+    no_speed_limit: bool = False
 
 
 class AlternativesResponse(BaseModel):
@@ -66,6 +77,8 @@ class RouteCreate(BaseModel):
     # compute_route s'appuie toujours sur settings.graphhopper_profile.
     profile: str = settings.graphhopper_profile
     avoid_zones: Optional[list[AvoidZone]] = None
+    speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
+    no_speed_limit: bool = False
 
 
 class RouteUpdate(BaseModel):
@@ -81,6 +94,8 @@ class RouteUpdate(BaseModel):
     duration_s: Optional[float] = None
     geometry_geojson: Optional[dict] = None
     avoid_zones: Optional[list[AvoidZone]] = None
+    speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
+    no_speed_limit: Optional[bool] = None
 
     @field_validator("waypoints")
     @classmethod
@@ -103,6 +118,8 @@ class RouteOut(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     avoid_zones: list[AvoidZone] = []
+    speed_limit_kmh: Optional[float] = None
+    no_speed_limit: bool = False
 
     class Config:
         from_attributes = True

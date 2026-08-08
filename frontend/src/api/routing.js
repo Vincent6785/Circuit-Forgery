@@ -22,26 +22,31 @@ export function fromApiAvoidZones(zones) {
   return (zones || []).map((z) => ({ lat: z.lat, lon: z.lon, radiusM: z.radius_m }));
 }
 
-export function computeRoute(waypoints, avoidZones = []) {
+export function computeRoute(waypoints, avoidZones = [], speedLimitKmh = null, noSpeedLimit = false) {
   return _postJson(
     "/api/routes/compute",
-    { waypoints, avoid_zones: toApiAvoidZones(avoidZones) },
+    {
+      waypoints,
+      avoid_zones: toApiAvoidZones(avoidZones),
+      speed_limit_kmh: speedLimitKmh,
+      no_speed_limit: noSpeedLimit,
+    },
     "Erreur de calcul d'itinéraire"
   );
 }
 
-export function computeRoundTrip(start, distanceM, seed) {
+export function computeRoundTrip(start, distanceM, seed, speedLimitKmh = null, noSpeedLimit = false) {
   return _postJson(
     "/api/routes/round-trip",
-    { start, distance_m: distanceM, seed },
+    { start, distance_m: distanceM, seed, speed_limit_kmh: speedLimitKmh, no_speed_limit: noSpeedLimit },
     "Erreur de génération du circuit"
   );
 }
 
-export function computeAlternatives(waypoints) {
+export function computeAlternatives(waypoints, noSpeedLimit = false) {
   return _postJson(
     "/api/routes/alternatives",
-    { waypoints },
+    { waypoints, no_speed_limit: noSpeedLimit },
     "Erreur de calcul des itinéraires alternatifs"
   );
 }

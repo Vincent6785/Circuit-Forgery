@@ -25,7 +25,8 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   async function generateFrom(lat, lon, distanceM, seed) {
     generateBtn.disabled = true;
     try {
-      const result = await computeRoundTrip({ lat, lon }, distanceM, seed);
+      const { speedLimitKmh, noSpeedLimit } = store.getState();
+      const result = await computeRoundTrip({ lat, lon }, distanceM, seed, speedLimitKmh, noSpeedLimit);
       waypointManager.replaceAll(result.waypoints);
       store.setState({ editingRouteId: null }, { silent: true });
       // replaceAll ci-dessus a déjà déclenché un recalcul en fire-and-forget ;

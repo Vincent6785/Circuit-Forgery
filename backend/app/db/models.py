@@ -29,6 +29,10 @@ class Route(Base):
     # Nullable — absent aussi bien pour les trajets créés avant l'existence
     # des zones à éviter que pour ceux qui n'en ont simplement aucune.
     avoid_zones_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    # Nullable — None signifie le seuil par défaut du profil (80 km/h), pas
+    # une valeur manquante à distinguer d'un trajet plus ancien.
+    speed_limit_kmh: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+    no_speed_limit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class PointOfInterest(Base):

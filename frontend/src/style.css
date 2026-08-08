@@ -83,6 +83,21 @@ html, body, #app {
   resize: vertical;
 }
 
+.panel label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.panel input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
 #saved-routes-list,
 #poi-list,
 #avoid-zone-list,
