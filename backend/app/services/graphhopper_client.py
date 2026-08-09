@@ -162,7 +162,7 @@ class GraphHopperClient:
                     # donc un corps JSON. Vérifié empiriquement que round_trip
                     # (contrairement à alternative_route) accepte bien un
                     # custom_model combiné.
-                    body = {**base, "point": f"{lat},{lon}", "custom_model": build_custom_model([], tightened_speed_limit)}
+                    body = {**base, "points": [[lon, lat]], "custom_model": build_custom_model([], tightened_speed_limit)}
                     resp = await client.post(f"{self._base_url}/route", json=body)
                 else:
                     params = {**base, "point": f"{lat},{lon}", "points_encoded": "false", "ch.disable": "true"}

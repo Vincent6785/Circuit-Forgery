@@ -117,6 +117,11 @@ async def test_route_round_trip_uses_post_with_speed_limit():
     assert route.called
     body = json.loads(route.calls.last.request.content)
     assert body["algorithm"] == "round_trip"
+    # Format attendu par un corps JSON POST ("points": liste de [lon, lat]) —
+    # pas "point" (chaîne "lat,lon"), qui n'est valide qu'en paramètre GET et
+    # que GraphHopper rejette côté POST avec "You have to pass at least one point".
+    assert body["points"] == [[2.35, 48.85]]
+    assert "point" not in body
     assert body["custom_model"]["priority"] == [
         {"if": "max_speed > 50 && max_speed < 1000", "multiply_by": "0"}
     ]

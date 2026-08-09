@@ -52,6 +52,27 @@ test("abaisser la limite de vitesse resserre le filtre appliqué au trajet", asy
   }
 });
 
+test("générer un circuit en boucle avec un seuil de vitesse resserré actif ne plante pas", async ({ page }) => {
+  // Régression : la branche POST de route_round_trip() (déclenchée par un
+  // seuil resserré, cf. graphhopper_client.py) envoyait un corps JSON
+  // invalide ("point" au lieu de "points"), rejeté par GraphHopper avec
+  // "You have to pass at least one point" — jamais exercé par un test e2e
+  // avant ce cas, seul un test unitaire mocké couvrait cette branche.
+  await setupParisView(page);
+  await page.fill("#speed-limit-input", "50");
+  await page.waitForTimeout(500);
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await clickMapAt(page, 48.8566, 2.3522);
+
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
+  const banner = page.locator("#route-error");
+  await expect(banner).not.toHaveClass(/error/);
+  const waypoints = await page.evaluate(() => window.__getWaypoints());
+  expect(waypoints.length).toBeGreaterThanOrEqual(2);
+});
+
 test("un seuil personnalisé hors bornes est rejeté par le backend", async ({ request }) => {
   const resp = await request.post("/api/routes/compute", {
     data: {
