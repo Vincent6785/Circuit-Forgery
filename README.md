@@ -58,7 +58,13 @@ service cloud.
   se quitte sans rien créer via Échap ou le lien "Annuler" affiché pendant
   l'attente. Quand le tracé généré est trop dense pour tenir dans la limite
   de waypoints, un bandeau signale que la boucle affichée est une version
-  simplifiée du tracé réel calculé par GraphHopper.
+  simplifiée du tracé réel calculé par GraphHopper. Un **point de passage**
+  optionnel ("📍 Point de passage" puis clic sur la carte) force le circuit
+  généré à traverser cet endroit — GraphHopper n'acceptant qu'un seul point
+  pour `round_trip`, le point choisi est inséré après coup dans la séquence
+  de waypoints (à l'emplacement qui minimise le détour), puis routé
+  normalement ; la distance affichée n'est alors plus garantie de coller
+  précisément à la distance cible.
 - **Itinéraires alternatifs** : pour un trajet à exactement 2 points
   (départ/arrivée), jusqu'à 3 tracés distincts proposés au choix.
   Désactivé tant qu'une zone à éviter ou une limite de vitesse

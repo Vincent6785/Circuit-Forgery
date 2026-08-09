@@ -136,7 +136,8 @@ html, body, #app {
   color: white;
 }
 
-#round-trip-cancel-btn {
+#round-trip-cancel-btn,
+#round-trip-forced-point-clear-btn {
   display: inline;
   width: auto;
   margin: 0 0 0 0.3rem;

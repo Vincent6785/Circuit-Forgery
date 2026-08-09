@@ -1,25 +1,82 @@
+import L from "leaflet";
 import { computeRoundTrip } from "../api/routing.js";
 import { showRouteError, showBanner } from "../ui/sidebar.js";
+import { cheapestInsertionIndex } from "../utils/geo.js";
+
+const FORCED_POINT_COLOR = "#6a1b9a";
+const START_HINT = "Cliquez un point de départ sur la carte…";
+const FORCED_POINT_HINT = "Cliquez le point que le circuit devra traverser…";
 
 /** Câble le panneau "Circuit en boucle" : distance cible + clic sur la carte
  * comme point de départ, via l'algorithme round_trip de GraphHopper. Les
  * points générés sont ensuite traités comme des waypoints normaux,
- * éditables avec les outils existants. */
+ * éditables avec les outils existants.
+ *
+ * "Point de passage" (optionnel) : GraphHopper n'accepte qu'un seul point
+ * pour round_trip (vérifié empiriquement — en envoyer un second échoue avec
+ * "For round trip calculation exactly one point is required"), donc le
+ * point choisi n'est pas transmis à la génération elle-même. Il est inséré
+ * après coup dans la séquence de waypoints reçue, exactement comme le
+ * ferait un glisser-déposer sur le tracé (map/route-insert-interaction.js) —
+ * le recalcul automatique route ensuite le circuit à travers ce point via
+ * le moteur de routage normal. */
 export function initRoundTripController({ map, store, waypointManager, recomputeAndRender }) {
   const distanceInput = document.getElementById("round-trip-distance-input");
   const generateBtn = document.getElementById("round-trip-generate-btn");
   const variantBtn = document.getElementById("round-trip-variant-btn");
+  const forcedPointBtn = document.getElementById("round-trip-forced-point-btn");
+  const forcedPointStatus = document.getElementById("round-trip-forced-point-status");
+  const forcedPointClearBtn = document.getElementById("round-trip-forced-point-clear-btn");
   const hint = document.getElementById("round-trip-hint");
+  const hintText = document.getElementById("round-trip-hint-text");
   const cancelBtn = document.getElementById("round-trip-cancel-btn");
 
-  let picking = false;
+  let pickingMode = null; // "start" | "forced-point" | null
   let lastStart = null;
   let lastDistanceM = null;
+  let forcedPoint = null; // {lat, lon} | null
+  let forcedPointMarker = null;
 
   function stopPicking() {
-    picking = false;
+    pickingMode = null;
     waypointManager.setAddOnMapClickEnabled(true);
     hint.classList.add("hidden");
+  }
+
+  function setForcedPoint(lat, lon) {
+    forcedPoint = { lat, lon };
+    if (forcedPointMarker) forcedPointMarker.remove();
+    forcedPointMarker = L.circleMarker([lat, lon], {
+      radius: 8,
+      color: "#fff",
+      weight: 2,
+      fillColor: FORCED_POINT_COLOR,
+      fillOpacity: 1,
+    }).addTo(map);
+
+    const container = document.createElement("div");
+    container.textContent = "Point de passage ";
+    const removeLink = document.createElement("a");
+    removeLink.href = "#";
+    removeLink.textContent = "✕ Retirer";
+    removeLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      clearForcedPoint();
+      map.closePopup();
+    });
+    container.appendChild(removeLink);
+    forcedPointMarker.bindPopup(container);
+
+    forcedPointStatus.classList.remove("hidden");
+  }
+
+  function clearForcedPoint() {
+    forcedPoint = null;
+    if (forcedPointMarker) {
+      forcedPointMarker.remove();
+      forcedPointMarker = null;
+    }
+    forcedPointStatus.classList.add("hidden");
   }
 
   async function generateFrom(lat, lon, distanceM, seed) {
@@ -27,14 +84,31 @@ export function initRoundTripController({ map, store, waypointManager, recompute
     try {
       const { speedLimitKmh, noSpeedLimit } = store.getState();
       const result = await computeRoundTrip({ lat, lon }, distanceM, seed, speedLimitKmh, noSpeedLimit);
-      waypointManager.replaceAll(result.waypoints);
+      let waypoints = result.waypoints;
+      if (forcedPoint) {
+        // Le point de passage n'est pas forcément sur le tracé généré (il a
+        // été cliqué avant même que le circuit existe) : on l'insère à la
+        // paire de waypoints consécutifs qui minimise le détour à vol
+        // d'oiseau, le routage réel affine ensuite le tracé précis. Fait ici,
+        // avant le seul replaceAll ci-dessous, plutôt qu'un replaceAll suivi
+        // d'un insertPointAt séparé — pour ne pas faire courir deux recalculs
+        // concurrents (même vigilance que pour le bandeau de simplification
+        // juste en dessous).
+        const index = cheapestInsertionIndex(waypoints, forcedPoint);
+        waypoints = [
+          ...waypoints.slice(0, index + 1),
+          { lat: forcedPoint.lat, lon: forcedPoint.lon },
+          ...waypoints.slice(index + 1),
+        ];
+      }
+      waypointManager.replaceAll(waypoints);
       store.setState({ editingRouteId: null }, { silent: true });
       // replaceAll ci-dessus a déjà déclenché un recalcul en fire-and-forget ;
       // on attend explicitement sa fin pour que le bandeau de simplification
       // affiché plus bas ne soit pas écrasé par le hideRouteError()/
       // showRouteError() de ce calcul — même course critique que pour
       // l'import GPX (voir gpx-controller.js).
-      await recomputeAndRender(result.waypoints);
+      await recomputeAndRender(waypoints);
       if (result.simplified) {
         showBanner(
           "Le circuit généré était trop dense : seuls certains points ont été conservés comme waypoints.",
@@ -58,18 +132,32 @@ export function initRoundTripController({ map, store, waypointManager, recompute
       return;
     }
     lastDistanceM = km * 1000;
-    picking = true;
+    pickingMode = "start";
     waypointManager.setAddOnMapClickEnabled(false);
+    hintText.textContent = START_HINT;
+    hint.classList.remove("hidden");
+  });
+
+  forcedPointBtn.addEventListener("click", () => {
+    pickingMode = "forced-point";
+    waypointManager.setAddOnMapClickEnabled(false);
+    hintText.textContent = FORCED_POINT_HINT;
     hint.classList.remove("hidden");
   });
 
   map.on("click", (e) => {
-    if (!picking) return;
+    if (!pickingMode) return;
+    const mode = pickingMode;
     stopPicking();
-    generateFrom(e.latlng.lat, e.latlng.lng, lastDistanceM);
+    if (mode === "start") {
+      generateFrom(e.latlng.lat, e.latlng.lng, lastDistanceM);
+    } else {
+      setForcedPoint(e.latlng.lat, e.latlng.lng);
+    }
   });
 
   cancelBtn.addEventListener("click", () => stopPicking());
+  forcedPointClearBtn.addEventListener("click", () => clearForcedPoint());
 
   // Volontairement sans garde anti-frappe-dans-un-champ (contrairement à
   // Suppr dans markers.js) : Échap n'a pas d'usage concurrent dans un champ
@@ -77,7 +165,7 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   // le focus sur #round-trip-distance-input juste après avoir cliqué
   // "Générer".
   document.addEventListener("keydown", (e) => {
-    if (!picking || e.key !== "Escape") return;
+    if (!pickingMode || e.key !== "Escape") return;
     stopPicking();
   });
 

@@ -151,6 +151,63 @@ test("fermer la boucle ajoute le point de départ en fin de trajet", async ({ pa
   await expect(page.locator("#close-loop-btn")).toBeDisabled();
 });
 
+test("un point de passage défini est bien inséré dans le circuit généré", async ({ page }) => {
+  await setupParisView(page);
+
+  await page.locator("#round-trip-forced-point-btn").click();
+  await expect(page.locator("#round-trip-hint-text")).toContainText("devra traverser");
+  await clickMapAt(page, 48.87, 2.34);
+  await expect(page.locator("#round-trip-hint")).toHaveClass(/hidden/);
+  await expect(page.locator("#round-trip-forced-point-status")).not.toHaveClass(/hidden/);
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
+
+  const waypoints = await page.evaluate(() => window.__getWaypoints());
+  const hasForcedPoint = waypoints.some(
+    (w) => Math.abs(w.lat - 48.87) < 1e-4 && Math.abs(w.lon - 2.34) < 1e-4
+  );
+  expect(hasForcedPoint).toBe(true);
+});
+
+test("Échap pendant le mode point de passage n'en définit aucun", async ({ page }) => {
+  await setupParisView(page);
+
+  await page.locator("#round-trip-forced-point-btn").click();
+  await expect(page.locator("#round-trip-hint")).not.toHaveClass(/hidden/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#round-trip-hint")).toHaveClass(/hidden/);
+  await expect(page.locator("#round-trip-forced-point-status")).toHaveClass(/hidden/);
+
+  // Le clic suivant doit redevenir un ajout de point ordinaire.
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#waypoint-list li")).toHaveCount(1);
+});
+
+test("retirer le point de passage avant génération l'exclut du circuit", async ({ page }) => {
+  await setupParisView(page);
+
+  await page.locator("#round-trip-forced-point-btn").click();
+  await clickMapAt(page, 48.87, 2.34);
+  await expect(page.locator("#round-trip-forced-point-status")).not.toHaveClass(/hidden/);
+
+  await page.locator("#round-trip-forced-point-clear-btn").click();
+  await expect(page.locator("#round-trip-forced-point-status")).toHaveClass(/hidden/);
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
+
+  const waypoints = await page.evaluate(() => window.__getWaypoints());
+  const hasForcedPoint = waypoints.some(
+    (w) => Math.abs(w.lat - 48.87) < 1e-4 && Math.abs(w.lon - 2.34) < 1e-4
+  );
+  expect(hasForcedPoint).toBe(false);
+});
+
 test("inverser le sens inverse l'ordre des waypoints", async ({ page }) => {
   await setupParisView(page);
   await clickMapAt(page, 48.8566, 2.3522);
