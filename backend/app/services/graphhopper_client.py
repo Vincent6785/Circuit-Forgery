@@ -36,6 +36,24 @@ def _friendly_message(data: dict) -> str:
     return data.get("message") or "GraphHopper n'a pas pu calculer cet itinéraire."
 
 
+def _resolve_profile(profile: Optional[str], no_speed_limit: bool) -> str:
+    # "Aucune limite" bascule de profil (graphhopper_no_limit_profile n'a
+    # aucune règle de vitesse) plutôt que de tenter de lever la règle du
+    # profil courant par custom_model — impossible, cf. avoid_zone.py.
+    if no_speed_limit:
+        return settings.graphhopper_no_limit_profile
+    return profile or settings.graphhopper_profile
+
+
+def _tightened_speed_limit(speed_limit_kmh: Optional[float], no_speed_limit: bool) -> Optional[float]:
+    # Un seuil personnalisé ne resserre que si en-dessous du défaut du
+    # profil (80) ; à 80 ou au-dessus, ou avec "Aucune limite", la règle
+    # serait redondante ou contradictoire.
+    if no_speed_limit or speed_limit_kmh is None or speed_limit_kmh >= 80:
+        return None
+    return speed_limit_kmh
+
+
 def _extract_paths(resp: httpx.Response) -> list[dict]:
     # Un 400 GraphHopper signale un point sans route à proximité ou l'absence
     # de connexion entre deux points — une erreur d'entrée utilisateur, pas
@@ -84,13 +102,8 @@ class GraphHopperClient:
         if len(points) < 2:
             raise GraphHopperRouteNotFoundError("Au moins 2 points sont requis pour calculer un itinéraire")
 
-        # "Aucune limite" bascule de profil (graphhopper_no_limit_profile n'a
-        # aucune règle de vitesse) plutôt que de tenter de lever la règle du
-        # profil courant par custom_model — impossible, cf. avoid_zone.py.
-        profile_name = settings.graphhopper_no_limit_profile if no_speed_limit else (profile or settings.graphhopper_profile)
-        # Un seuil personnalisé ne resserre que si en-dessous du défaut du
-        # profil (80) ; à 80 ou au-dessus, la règle serait redondante.
-        tightened_speed_limit = speed_limit_kmh if (speed_limit_kmh is not None and speed_limit_kmh < 80 and not no_speed_limit) else None
+        profile_name = _resolve_profile(profile, no_speed_limit)
+        tightened_speed_limit = _tightened_speed_limit(speed_limit_kmh, no_speed_limit)
 
         async with httpx.AsyncClient(timeout=30) as client:
             try:
@@ -140,8 +153,8 @@ class GraphHopperClient:
         no_speed_limit: bool = False,
     ) -> dict:
         lat, lon = start
-        profile_name = settings.graphhopper_no_limit_profile if no_speed_limit else (profile or settings.graphhopper_profile)
-        tightened_speed_limit = speed_limit_kmh if (speed_limit_kmh is not None and speed_limit_kmh < 80 and not no_speed_limit) else None
+        profile_name = _resolve_profile(profile, no_speed_limit)
+        tightened_speed_limit = _tightened_speed_limit(speed_limit_kmh, no_speed_limit)
 
         base = {
             "profile": profile_name,
@@ -181,7 +194,7 @@ class GraphHopperClient:
         # Un simple changement de profil (pas de custom_model) reste compatible
         # avec alternative_route — seul un custom_model par requête ne l'est pas
         # (cf. ui/route-alternatives.js, incompatibilité vérifiée empiriquement).
-        profile_name = settings.graphhopper_no_limit_profile if no_speed_limit else (profile or settings.graphhopper_profile)
+        profile_name = _resolve_profile(profile, no_speed_limit)
         params = {
             "point": [f"{lat},{lon}" for lat, lon in points],
             "profile": profile_name,

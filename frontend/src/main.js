@@ -35,6 +35,7 @@ const store = createStore({
   avoidZones: [], // liste de {lat, lon, radiusM}
   speedLimitKmh: null, // seuil personnalisé (20-80), ou null = défaut du profil (80)
   noSpeedLimit: false, // true = profil sans exclusion de vitesse
+  pendingForcedPoint: null, // {lat, lon} | null — point de passage pour la prochaine génération de circuit en boucle
 });
 
 const history = createHistory();
@@ -92,6 +93,7 @@ if (draft && draft.waypoints?.length > 0) {
       avoidZones: draft.avoidZones || [],
       speedLimitKmh: draft.speedLimitKmh ?? null,
       noSpeedLimit: draft.noSpeedLimit || false,
+      pendingForcedPoint: draft.pendingForcedPoint ?? null,
     },
     { silent: true }
   );

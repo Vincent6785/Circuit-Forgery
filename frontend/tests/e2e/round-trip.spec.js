@@ -208,6 +208,35 @@ test("retirer le point de passage avant génération l'exclut du circuit", async
   expect(hasForcedPoint).toBe(false);
 });
 
+test("Effacer les points retire aussi un point de passage en attente", async ({ page }) => {
+  // Régression : forcedPoint vivait en variable locale au contrôleur
+  // round-trip, invisible du reset fait par "Effacer les points" (qui ne
+  // connaît que le store) — le marqueur restait affiché et le point était
+  // quand même appliqué à la génération suivante malgré le "reset" affiché.
+  await setupParisView(page);
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#waypoint-list li")).toHaveCount(1);
+
+  await page.locator("#round-trip-forced-point-btn").click();
+  await clickMapAt(page, 48.87, 2.34);
+  await expect(page.locator("#round-trip-forced-point-status")).not.toHaveClass(/hidden/);
+
+  await page.locator("#clear-route-btn").click();
+  await expect(page.locator("#round-trip-forced-point-status")).toHaveClass(/hidden/);
+  await expect(page.locator("#waypoint-list li")).toHaveCount(0);
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
+
+  const waypoints = await page.evaluate(() => window.__getWaypoints());
+  const hasForcedPoint = waypoints.some(
+    (w) => Math.abs(w.lat - 48.87) < 1e-4 && Math.abs(w.lon - 2.34) < 1e-4
+  );
+  expect(hasForcedPoint).toBe(false);
+});
+
 test("inverser le sens inverse l'ordre des waypoints", async ({ page }) => {
   await setupParisView(page);
   await clickMapAt(page, 48.8566, 2.3522);

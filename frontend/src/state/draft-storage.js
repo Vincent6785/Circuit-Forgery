@@ -5,6 +5,9 @@ export function saveDraft(state) {
     waypoints: state.waypoints,
     computedRoute: state.computedRoute,
     avoidZones: state.avoidZones,
+    speedLimitKmh: state.speedLimitKmh,
+    noSpeedLimit: state.noSpeedLimit,
+    pendingForcedPoint: state.pendingForcedPoint,
     savedAt: new Date().toISOString(),
   };
   localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
