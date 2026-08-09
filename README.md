@@ -212,6 +212,25 @@ GraphHopper (port 8989) n'est publié que sur `127.0.0.1` : il n'est
 joignable ni depuis le LAN ni depuis l'extérieur, seul le backend proxy
 l'est.
 
+### Images publiées
+
+`.github/workflows/publish-docker.yml` construit et publie automatiquement
+les images `backend` et `graphhopper` sur GitHub Container Registry à
+chaque mise à jour de `main` (tags `latest` et `<sha du commit>`) :
+
+```
+ghcr.io/vincent6785/circuit-forgery-backend:latest
+ghcr.io/vincent6785/circuit-forgery-graphhopper:latest
+```
+
+`docker pull` sur ces images évite de construire depuis les sources, mais
+ne dispense pas du reste de la configuration au runtime : les images
+n'embarquent ni les données OSM, ni `graphhopper/config.yml`, ni les
+custom models — ce sont toujours des volumes montés (voir
+`docker-compose.yml`). Remplacer `build:` par `image: ghcr.io/...` dans
+`docker-compose.yml` fonctionne pour éviter un build local, à condition de
+garder les mêmes montages de volumes.
+
 ## Configuration
 
 Le backend se configure par variables d'environnement, préfixées `CF_`
