@@ -227,9 +227,23 @@ ghcr.io/vincent6785/circuit-forgery-graphhopper:latest
 ne dispense pas du reste de la configuration au runtime : les images
 n'embarquent ni les données OSM, ni `graphhopper/config.yml`, ni les
 custom models — ce sont toujours des volumes montés (voir
-`docker-compose.yml`). Remplacer `build:` par `image: ghcr.io/...` dans
-`docker-compose.yml` fonctionne pour éviter un build local, à condition de
-garder les mêmes montages de volumes.
+`docker-compose.yml`). `docker-compose.images.yml` surcharge uniquement
+`image:` sur les deux services (hérite du reste — volumes, ports,
+healthchecks — de `docker-compose.yml`) pour utiliser les images publiées
+au lieu de builder localement :
+
+```bash
+git clone https://github.com/Vincent6785/Circuit-Forgery.git
+cd Circuit-Forgery
+./scripts/download-osm-data.sh   # toujours nécessaire, cf. Démarrage
+docker compose -f docker-compose.yml -f docker-compose.images.yml pull
+docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+```
+
+Cloner le dépôt reste la façon la plus simple d'obtenir
+`graphhopper/config.yml` et les custom models ; ce sont des fichiers texte
+légers (pas de gros binaire versionné), le clone n'a rien de coûteux en soi
+— seules les données OSM (téléchargées à part) sont volumineuses.
 
 ## Configuration
 
