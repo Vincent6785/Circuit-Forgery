@@ -1,11 +1,13 @@
 # Circuit Forgery
 
 **Circuit Forgery** est un planificateur de trajets moto, auto-hébergé et
-100 % local, dédié à la France. Sa règle de base : ne jamais proposer de
-route dont la limite de vitesse signalée dépasse 80 km/h. Le calcul
-d'itinéraire s'appuie sur les données routières OpenStreetMap via une
-instance GraphHopper auto-hébergée — aucun service tiers de routage n'est
-utilisé, aucune donnée ne sort de l'infrastructure locale.
+100 % local, dédié à la France. Son réglage par défaut : ne proposer que des
+routes dont la limite de vitesse signalée ne dépasse pas 80 km/h — un seuil
+personnalisable ou désactivable depuis l'interface (voir
+[Fonctionnalités](#fonctionnalités)). Le calcul d'itinéraire s'appuie sur
+les données routières OpenStreetMap via une instance GraphHopper
+auto-hébergée — aucun service tiers de routage n'est utilisé, aucune donnée
+ne sort de l'infrastructure locale.
 
 Le déploiement est pensé pour tourner sur une seule machine (ou un NAS/mini
 serveur) du réseau domestique et être utilisé depuis n'importe quel appareil
@@ -178,9 +180,9 @@ Trois services Docker, orchestrés par `docker-compose.yml` :
   uniquement ; le backend l'atteint via le réseau interne docker-compose.
 - **`backend/`** — API FastAPI qui sert de proxy/enrichissement vers
   GraphHopper (calcul d'itinéraire, alternatives, circuits en boucle,
-  zones à éviter, import/export GPX, géocodage via Nominatim) et persiste
-  trajets/POI dans SQLite. Sert aussi le frontend buildé (fichiers
-  statiques) — un seul port exposé au LAN.
+  zones à éviter, seuil de vitesse personnalisé, import/export GPX,
+  géocodage via Nominatim) et persiste trajets/POI dans SQLite. Sert aussi
+  le frontend buildé (fichiers statiques) — un seul port exposé au LAN.
 - **`frontend/`** — application vanille JS (pas de framework), carte
   Leaflet, buildée avec Vite et servie par le backend en production.
 
@@ -266,9 +268,9 @@ l'erreur au premier `npm run test:e2e` (`sudo pacman -S ...` ou équivalent).
 
 Suites dans `frontend/tests/e2e/` (une par fonctionnalité) : navigation et
 sauvegarde d'un trajet, édition des waypoints, précision (renommage,
-coordonnées), annuler/rétablir, circuits en boucle, zones à éviter,
-alternatives, duplication, import/export GPX, points d'intérêt, recherche
-d'adresse, brouillon persistant, gestion des erreurs de routage.
+coordonnées), annuler/rétablir, circuits en boucle, zones à éviter, limite
+de vitesse, alternatives, duplication, import/export GPX, points d'intérêt,
+recherche d'adresse, brouillon persistant, gestion des erreurs de routage.
 `address-search.spec.js` mocke `/api/geocode` — seule exception à la règle
 "pas de mocks", Nominatim étant un service tiers à rate-limit strict.
 
@@ -415,7 +417,11 @@ sauvegarde → rechargement, y compris les cas d'erreur de routage). Limite
 de vitesse personnalisable vérifiée contre un cas réel concret (Pont de
 Normandie, `max_speed > 80` donc exclu par défaut) : 91 km de détour par
 défaut, ~70 km avec "Aucune limite" une fois le profil `moto_no_limit`
-importé et vérifié fonctionnel.
+importé et vérifié fonctionnel. Point de passage du circuit en boucle
+vérifié après confirmation empirique que `algorithm=round_trip` rejette
+tout appel avec plus d'un point ("For round trip calculation exactly one
+point is required") — d'où l'insertion après coup dans la séquence de
+waypoints plutôt qu'un envoi direct à GraphHopper.
 
 **Non vérifié dans cet environnement** : l'accès depuis un second appareil
 physique du LAN (un seul appareil disponible pour les vérifications) —
