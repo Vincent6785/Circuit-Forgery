@@ -23,3 +23,9 @@ def test_subsample_preserves_order():
     items = list(range(50))
     result = subsample(items, 10)
     assert result == sorted(result)
+
+
+def test_subsample_does_not_divide_by_zero_when_max_items_is_one():
+    items = list(range(50))
+    result = subsample(items, 1)
+    assert result == [0]

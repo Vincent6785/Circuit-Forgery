@@ -11,6 +11,12 @@
 # Toujours nécessaire malgré les images publiées (non embarqué dedans) :
 # graphhopper/config.yml, graphhopper/custom_models/, et les données OSM via
 # scripts/download-osm-data.sh — voir la section "Images publiées" du README.
+#
+# :latest suit toujours le dernier "pull", sans référence de retour arrière
+# enregistrée. Pour figer une version précise (rollback, reproductibilité),
+# remplacer :latest par le SHA du commit voulu — chaque image publiée par
+# .github/workflows/publish-docker.yml est aussi taguée avec le SHA du commit
+# de main qui l'a produite (visible dans l'historique du workflow sur GitHub).
 services:
   graphhopper:
     image: ghcr.io/vincent6785/circuit-forgery-graphhopper:latest

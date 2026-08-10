@@ -95,6 +95,7 @@ if (draft && draft.waypoints?.length > 0) {
       speedLimitKmh: draft.speedLimitKmh ?? null,
       noSpeedLimit: draft.noSpeedLimit || false,
       pendingForcedPoint: draft.pendingForcedPoint ?? null,
+      roundTripVariant: draft.roundTripVariant ?? null,
     },
     { silent: true }
   );
