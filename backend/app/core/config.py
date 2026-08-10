@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     max_waypoints: int = Field(default=20, ge=2)
     max_gpx_upload_bytes: int = Field(default=5_000_000, gt=0)
     max_avoid_zone_radius_m: float = Field(default=20_000, gt=0)
+    # Pas de plafond équivalent avant ce correctif, contrairement à
+    # max_waypoints pour les waypoints : chaque zone ajoute un polygone à 24
+    # sommets au custom_model envoyé à GraphHopper à chaque recalcul, sans
+    # limite ni côté client ni côté serveur.
+    max_avoid_zones: int = Field(default=20, ge=1)
     max_round_trip_distance_m: float = Field(default=500_000, gt=0)
 
     nominatim_url: str = "https://nominatim.openstreetmap.org"

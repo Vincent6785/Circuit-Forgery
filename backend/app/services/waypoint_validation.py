@@ -15,6 +15,8 @@ def validate_waypoints(waypoints: list[Waypoint]) -> None:
 
 
 def validate_avoid_zones(avoid_zones: list[AvoidZone]) -> None:
+    if len(avoid_zones) > settings.max_avoid_zones:
+        raise HTTPException(400, f"Trop de zones à éviter (max {settings.max_avoid_zones})")
     for zone in avoid_zones:
         if not (settings.min_lat <= zone.lat <= settings.max_lat):
             raise HTTPException(400, f"Latitude hors de France métropolitaine: {zone.lat}")

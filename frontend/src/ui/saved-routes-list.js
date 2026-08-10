@@ -26,6 +26,7 @@ async function _listRoutesFavoritesFirst() {
 
 function _label(route, onSelect) {
   const label = document.createElement("span");
+  label.className = "list-item-label";
   label.textContent = `${route.is_favorite ? "★ " : ""}${route.name} (${(route.distance_m / 1000).toFixed(1)} km)`;
   if (route.description) label.title = route.description;
   label.addEventListener("click", () => onSelect(route));

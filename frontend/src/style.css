@@ -126,6 +126,23 @@ html, body, #app {
   background: #f0f0f0;
 }
 
+/* Sans ça, un libellé long (nom de trajet, notes de POI...) enveloppe sur
+   plusieurs lignes au lieu d'être tronqué, poussant les boutons d'action à
+   côté — contrairement à .waypoint-label qui gère déjà ce cas. */
+.list-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#alternatives-list li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #alternatives-list li.selected {
   background: #e7f3ff;
   font-weight: bold;

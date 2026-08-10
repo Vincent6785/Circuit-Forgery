@@ -13,6 +13,7 @@ export function refreshPoiList(onSelect, onData) {
 
 function _label(poi, onSelect) {
   const label = document.createElement("span");
+  label.className = "list-item-label";
   label.textContent = `${categoryEmoji(poi.category)} ${poi.name}`;
   label.addEventListener("click", () => onSelect(poi));
   return label;
