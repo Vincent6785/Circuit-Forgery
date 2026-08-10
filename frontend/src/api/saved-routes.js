@@ -1,33 +1,25 @@
-import { fetchWithTimeout } from "./http.js";
-
-async function handle(res) {
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}));
-    throw new Error(detail.detail || `Erreur API (${res.status})`);
-  }
-  return res.status === 204 ? null : res.json();
-}
+import { apiFetch } from "./http.js";
 
 export function listRoutes() {
-  return fetchWithTimeout("/api/routes").then(handle);
+  return apiFetch("/api/routes");
 }
 
 export function createRoute(route) {
-  return fetchWithTimeout("/api/routes", {
+  return apiFetch("/api/routes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(route),
-  }).then(handle);
+  });
 }
 
 export function updateRoute(id, patch) {
-  return fetchWithTimeout(`/api/routes/${id}`, {
+  return apiFetch(`/api/routes/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
-  }).then(handle);
+  });
 }
 
 export function deleteRoute(id) {
-  return fetchWithTimeout(`/api/routes/${id}`, { method: "DELETE" }).then(handle);
+  return apiFetch(`/api/routes/${id}`, { method: "DELETE" });
 }

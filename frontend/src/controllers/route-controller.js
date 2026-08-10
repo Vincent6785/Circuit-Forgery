@@ -83,7 +83,10 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
     document.getElementById("cancel-edit-btn").classList.toggle("hidden", !editing);
   });
 
-  document.getElementById("clear-route-btn").addEventListener("click", () => {
+  /** Remet le trajet courant à zéro : partagé par "Effacer les points" et
+   * "Annuler" (édition) — corps strictement identique, dont un champ oublié
+   * ici resterait invisible dans l'autre sans ce partage. */
+  function resetRouteState() {
     waypointManager.clear();
     store.setState(
       {
@@ -98,7 +101,9 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
     );
     document.getElementById("route-description-input").value = "";
     clearDraft();
-  });
+  }
+
+  document.getElementById("clear-route-btn").addEventListener("click", resetRouteState);
 
   document.getElementById("save-route-btn").addEventListener("click", async (e) => {
     const { waypoints, computedRoute, avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
@@ -166,29 +171,22 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
     }
   });
 
-  document.getElementById("cancel-edit-btn").addEventListener("click", () => {
-    waypointManager.clear();
-    store.setState(
-      {
-        editingRouteId: null,
-        avoidZones: [],
-        speedLimitKmh: null,
-        noSpeedLimit: false,
-        pendingForcedPoint: null,
-        roundTripVariant: null,
-      },
-      { silent: true }
-    );
-    document.getElementById("route-description-input").value = "";
-    clearDraft();
-  });
+  document.getElementById("cancel-edit-btn").addEventListener("click", resetRouteState);
 
-  function loadSavedRoute(route) {
+  /** Charge un trajet sauvegardé dans l'éditeur — partagé par les trois cas
+   * d'usage (aperçu, édition, duplication), qui ne diffèrent que par
+   * editingRouteId et le pré-remplissage du nom. Un champ d'état oublié ici
+   * resterait sinon invisible dans les deux autres cas. */
+  function applyLoadedRoute(route, { editingRouteId, prefillName = false } = {}) {
     waypointManager.setPointsSilently(route.waypoints);
     routeLayer.draw(route.geometry_geojson, []);
     showRouteInfo(route.distance_m, route.duration_s);
     hideRouteError();
     document.getElementById("route-description-input").value = route.description || "";
+    if (prefillName) {
+      // Incite à distinguer la copie de l'original, reste librement modifiable.
+      document.getElementById("save-route-name-input").value = `Copie de ${route.name}`;
+    }
     store.setState(
       {
         computedRoute: {
@@ -196,7 +194,7 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
           duration_s: route.duration_s,
           geometry_geojson: route.geometry_geojson,
         },
-        editingRouteId: null,
+        editingRouteId,
         avoidZones: fromApiAvoidZones(route.avoid_zones),
         speedLimitKmh: route.speed_limit_kmh ?? null,
         noSpeedLimit: route.no_speed_limit || false,
@@ -205,59 +203,20 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
       },
       { silent: true }
     );
+  }
+
+  function loadSavedRoute(route) {
+    applyLoadedRoute(route, { editingRouteId: null });
   }
 
   function enterEditMode(route) {
-    waypointManager.setPointsSilently(route.waypoints);
-    routeLayer.draw(route.geometry_geojson, []);
-    showRouteInfo(route.distance_m, route.duration_s);
-    hideRouteError();
-    document.getElementById("route-description-input").value = route.description || "";
-    store.setState(
-      {
-        computedRoute: {
-          distance_m: route.distance_m,
-          duration_s: route.duration_s,
-          geometry_geojson: route.geometry_geojson,
-        },
-        editingRouteId: route.id,
-        avoidZones: fromApiAvoidZones(route.avoid_zones),
-        speedLimitKmh: route.speed_limit_kmh ?? null,
-        noSpeedLimit: route.no_speed_limit || false,
-        pendingForcedPoint: null,
-        roundTripVariant: null,
-      },
-      { silent: true }
-    );
+    applyLoadedRoute(route, { editingRouteId: route.id });
   }
 
-  /** Identique à enterEditMode, mais avec editingRouteId: null : "Sauvegarder"
-   * crée alors une nouvelle entrée plutôt que de modifier l'original. Le nom
-   * est pré-rempli pour inciter à le distinguer, mais reste librement
-   * modifiable, comme pour n'importe quel nouveau trajet. */
+  /** Identique à loadSavedRoute, mais avec editingRouteId: null : "Sauvegarder"
+   * crée alors une nouvelle entrée plutôt que de modifier l'original. */
   function duplicateRoute(route) {
-    waypointManager.setPointsSilently(route.waypoints);
-    routeLayer.draw(route.geometry_geojson, []);
-    showRouteInfo(route.distance_m, route.duration_s);
-    hideRouteError();
-    document.getElementById("route-description-input").value = route.description || "";
-    document.getElementById("save-route-name-input").value = `Copie de ${route.name}`;
-    store.setState(
-      {
-        computedRoute: {
-          distance_m: route.distance_m,
-          duration_s: route.duration_s,
-          geometry_geojson: route.geometry_geojson,
-        },
-        editingRouteId: null,
-        avoidZones: fromApiAvoidZones(route.avoid_zones),
-        speedLimitKmh: route.speed_limit_kmh ?? null,
-        noSpeedLimit: route.no_speed_limit || false,
-        pendingForcedPoint: null,
-        roundTripVariant: null,
-      },
-      { silent: true }
-    );
+    applyLoadedRoute(route, { editingRouteId: null, prefillName: true });
   }
 
   refreshSavedRoutesList(loadSavedRoute, enterEditMode, duplicateRoute);

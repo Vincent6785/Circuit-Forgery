@@ -1,16 +1,11 @@
-import { fetchWithTimeout } from "./http.js";
+import { apiFetch } from "./http.js";
 
-async function _postJson(url, body, fallbackMessage) {
-  const res = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}));
-    throw new Error(detail.detail || `${fallbackMessage} (${res.status})`);
-  }
-  return res.json();
+function _postJson(url, body, fallbackMessage) {
+  return apiFetch(
+    url,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    fallbackMessage
+  );
 }
 
 /** Passe une zone du format JS ({lat, lon, radiusM}) au format attendu par
@@ -37,10 +32,17 @@ export function computeRoute(waypoints, avoidZones = [], speedLimitKmh = null, n
   );
 }
 
-export function computeRoundTrip(start, distanceM, seed, speedLimitKmh = null, noSpeedLimit = false) {
+export function computeRoundTrip(start, distanceM, seed, avoidZones = [], speedLimitKmh = null, noSpeedLimit = false) {
   return _postJson(
     "/api/routes/round-trip",
-    { start, distance_m: distanceM, seed, speed_limit_kmh: speedLimitKmh, no_speed_limit: noSpeedLimit },
+    {
+      start,
+      distance_m: distanceM,
+      seed,
+      avoid_zones: toApiAvoidZones(avoidZones),
+      speed_limit_kmh: speedLimitKmh,
+      no_speed_limit: noSpeedLimit,
+    },
     "Erreur de génération du circuit"
   );
 }

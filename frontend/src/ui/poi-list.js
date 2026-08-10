@@ -1,4 +1,5 @@
 import { deletePOI, listPOI } from "../api/poi.js";
+import { categoryEmoji } from "../map/poi-layer.js";
 import { showRouteError } from "./sidebar.js";
 import { renderListPanel } from "./list-panel.js";
 
@@ -12,7 +13,7 @@ export function refreshPoiList(onSelect, onData) {
 
 function _label(poi, onSelect) {
   const label = document.createElement("span");
-  label.textContent = poi.name;
+  label.textContent = `${categoryEmoji(poi.category)} ${poi.name}`;
   label.addEventListener("click", () => onSelect(poi));
   return label;
 }

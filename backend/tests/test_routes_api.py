@@ -71,7 +71,9 @@ def _fake_path(distance=1000.0, coords=None):
 
 
 def test_round_trip_returns_sampled_waypoints(client, monkeypatch):
-    async def fake_round_trip(start, distance_m, seed=None, profile=None, speed_limit_kmh=None, no_speed_limit=False):
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
         return _fake_path(distance=20000.0)
 
     monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
@@ -88,7 +90,9 @@ def test_round_trip_returns_sampled_waypoints(client, monkeypatch):
 def test_round_trip_marks_simplified_when_dense_track_is_subsampled(client, monkeypatch):
     dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(500)]
 
-    async def fake_round_trip(start, distance_m, seed=None, profile=None, speed_limit_kmh=None, no_speed_limit=False):
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
         return _fake_path(distance=20000.0, coords=dense_coords)
 
     monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
@@ -105,7 +109,9 @@ def test_round_trip_marks_simplified_when_dense_track_is_subsampled(client, monk
 
 
 def test_round_trip_not_simplified_for_short_track(client, monkeypatch):
-    async def fake_round_trip(start, distance_m, seed=None, profile=None, speed_limit_kmh=None, no_speed_limit=False):
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
         return _fake_path(distance=1000.0)
 
     monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
@@ -122,7 +128,9 @@ def test_round_trip_reserves_headroom_under_max_waypoints(client, monkeypatch):
     # recalcul automatique sur /compute sans re-déclencher la même erreur.
     dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(500)]
 
-    async def fake_round_trip(start, distance_m, seed=None, profile=None, speed_limit_kmh=None, no_speed_limit=False):
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
         return _fake_path(distance=20000.0, coords=dense_coords)
 
     async def fake_route(points, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False):
@@ -143,6 +151,33 @@ def test_round_trip_reserves_headroom_under_max_waypoints(client, monkeypatch):
         json={"waypoints": [{"lat": w["lat"], "lon": w["lon"]} for w in waypoints] + [{"lat": 48.9, "lon": 2.4}]},
     )
     assert follow_up.status_code == 200
+
+
+def test_round_trip_passes_avoid_zones_to_graphhopper_client(client, monkeypatch):
+    # Régression : RoundTripRequest n'avait pas de champ avoid_zones, la
+    # génération de circuit ignorait donc totalement les zones à éviter déjà
+    # définies, contrairement au calcul d'itinéraire classique.
+    received = {}
+
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
+        received["avoid_zones"] = avoid_zones
+        return _fake_path(distance=20000.0)
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
+
+    resp = client.post(
+        "/api/routes/round-trip",
+        json={
+            "start": {"lat": 48.85, "lon": 2.35},
+            "distance_m": 20000,
+            "avoid_zones": [{"lat": 48.86, "lon": 2.36, "radius_m": 300}],
+        },
+    )
+    assert resp.status_code == 200
+    assert len(received["avoid_zones"]) == 1
+    assert received["avoid_zones"][0].lat == 48.86
 
 
 def test_round_trip_rejects_distance_over_limit(client):
@@ -178,6 +213,32 @@ def test_alternatives_returns_multiple_options(client, monkeypatch):
 def test_alternatives_rejects_wrong_number_of_waypoints(client):
     resp = client.post("/api/routes/alternatives", json={"waypoints": [{"lat": 48.85, "lon": 2.35}]})
     assert resp.status_code == 422
+
+
+def test_list_routes_returns_created_routes(client):
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    created = client.post("/api/routes", json=payload).json()
+
+    resp = client.get("/api/routes")
+    assert resp.status_code == 200
+    ids = [r["id"] for r in resp.json()]
+    assert created["id"] in ids
+
+
+def test_delete_route_removes_it(client):
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    created = client.post("/api/routes", json=payload).json()
+
+    resp = client.delete(f"/api/routes/{created['id']}")
+    assert resp.status_code == 204
+
+    assert client.get(f"/api/routes/{created['id']}").status_code == 404
+    assert created["id"] not in [r["id"] for r in client.get("/api/routes").json()]
+
+
+def test_delete_route_missing_returns_404(client):
+    resp = client.delete("/api/routes/999999")
+    assert resp.status_code == 404
 
 
 def test_create_route_persists_avoid_zones(client):
