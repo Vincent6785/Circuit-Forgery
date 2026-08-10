@@ -14,8 +14,9 @@ serveur) du réseau domestique et être utilisé depuis n'importe quel appareil
 du même réseau local — pas d'exposition à Internet, pas de compte, pas de
 service cloud.
 
-> Voir [LICENSE-DATA.md](LICENSE-DATA.md) pour la licence des données
-> OpenStreetMap utilisées et les conditions d'attribution.
+Code sous licence [MIT](LICENSE). Voir [LICENSE-DATA.md](LICENSE-DATA.md)
+pour la licence des données OpenStreetMap utilisées et les conditions
+d'attribution — distincte de la licence du code.
 
 ## Sommaire
 
@@ -244,6 +245,15 @@ Cloner le dépôt reste la façon la plus simple d'obtenir
 `graphhopper/config.yml` et les custom models ; ce sont des fichiers texte
 légers (pas de gros binaire versionné), le clone n'a rien de coûteux en soi
 — seules les données OSM (téléchargées à part) sont volumineuses.
+
+**⚠️ Ce démarrage rapide reproduit le même service que "Démarrage"
+ci-dessus : sans authentification, pensé pour un réseau local de confiance.**
+`docker-compose.yml` publie le port backend sur `0.0.0.0:8000` (toutes les
+interfaces), donc quiconque atteint ce port en lecture/écriture accède à
+tous les trajets et POI, sans compte ni mot de passe. Ne pas lancer cette
+stack telle quelle sur une machine directement joignable depuis Internet
+(VM cloud, port forwarding) sans ajouter sa propre authentification
+(reverse proxy, VPN...) devant.
 
 ## Configuration
 
