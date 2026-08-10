@@ -129,6 +129,20 @@ async def test_route_round_trip_uses_post_with_speed_limit():
 
 
 @respx.mock
+async def test_route_round_trip_uses_post_with_avoid_zones():
+    route = respx.post(f"{BASE_URL}/route").mock(
+        return_value=httpx.Response(200, json={"paths": [_path(distance=20000.0)]})
+    )
+    zones = [AvoidZone(lat=48.85, lon=2.35, radius_m=500)]
+    result = await _client().route_round_trip((48.85, 2.35), distance_m=20000, avoid_zones=zones)
+    assert route.called
+    body = json.loads(route.calls.last.request.content)
+    assert body["points"] == [[2.35, 48.85]]
+    assert "avoid_0" in body["custom_model"]["areas"]
+    assert result["distance"] == 20000.0
+
+
+@respx.mock
 async def test_route_round_trip_switches_profile_for_no_speed_limit():
     route = respx.get(f"{BASE_URL}/route").mock(
         return_value=httpx.Response(200, json={"paths": [_path(distance=20000.0)]})

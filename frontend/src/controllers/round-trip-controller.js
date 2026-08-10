@@ -90,8 +90,8 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   async function generateFrom(lat, lon, distanceM, seed) {
     generateBtn.disabled = true;
     try {
-      const { speedLimitKmh, noSpeedLimit, pendingForcedPoint } = store.getState();
-      const result = await computeRoundTrip({ lat, lon }, distanceM, seed, speedLimitKmh, noSpeedLimit);
+      const { avoidZones, speedLimitKmh, noSpeedLimit, pendingForcedPoint } = store.getState();
+      const result = await computeRoundTrip({ lat, lon }, distanceM, seed, avoidZones, speedLimitKmh, noSpeedLimit);
       let waypoints = result.waypoints;
       if (pendingForcedPoint) {
         // Le point de passage n'est pas forcément sur le tracé généré (il a

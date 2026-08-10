@@ -4,7 +4,7 @@ import { showRouteError } from "./sidebar.js";
 import { renderListPanel } from "./list-panel.js";
 
 export function refreshSavedRoutesList(onSelect, onEdit, onDuplicate) {
-  return renderListPanel("saved-routes-list", listRoutes, {
+  return renderListPanel("saved-routes-list", _listRoutesFavoritesFirst, {
     renderLabel: (route) => _label(route, onSelect),
     renderActions: (route) => [
       _editButton(route, onEdit),
@@ -14,6 +14,14 @@ export function refreshSavedRoutesList(onSelect, onEdit, onDuplicate) {
       _deleteButton(route, onSelect, onEdit, onDuplicate),
     ],
   });
+}
+
+/** Les favoris remontent en tête de liste. Tri stable (garanti par le moteur
+ * JS) : l'ordre created_at DESC déjà renvoyé par l'API est préservé au sein
+ * de chaque groupe favori/non-favori, sans avoir à le recalculer ici. */
+async function _listRoutesFavoritesFirst() {
+  const routes = await listRoutes();
+  return [...routes].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite));
 }
 
 function _label(route, onSelect) {

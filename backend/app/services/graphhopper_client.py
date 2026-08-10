@@ -149,6 +149,7 @@ class GraphHopperClient:
         distance_m: float,
         seed: Optional[int] = None,
         profile: Optional[str] = None,
+        avoid_zones: Optional[list[AvoidZone]] = None,
         speed_limit_kmh: Optional[float] = None,
         no_speed_limit: bool = False,
     ) -> dict:
@@ -170,12 +171,16 @@ class GraphHopperClient:
 
         async with httpx.AsyncClient(timeout=30) as client:
             try:
-                if tightened_speed_limit is not None:
-                    # Comme route() : un seuil resserré nécessite un custom_model,
-                    # donc un corps JSON. Vérifié empiriquement que round_trip
-                    # (contrairement à alternative_route) accepte bien un
-                    # custom_model combiné.
-                    body = {**base, "points": [[lon, lat]], "custom_model": build_custom_model([], tightened_speed_limit)}
+                if avoid_zones or tightened_speed_limit is not None:
+                    # Comme route() : des zones à éviter et/ou un seuil resserré
+                    # nécessitent un custom_model, donc un corps JSON. Vérifié
+                    # empiriquement que round_trip (contrairement à
+                    # alternative_route) accepte bien un custom_model combiné.
+                    body = {
+                        **base,
+                        "points": [[lon, lat]],
+                        "custom_model": build_custom_model(avoid_zones or [], tightened_speed_limit),
+                    }
                     resp = await client.post(f"{self._base_url}/route", json=body)
                 else:
                     params = {**base, "point": f"{lat},{lon}", "points_encoded": "false", "ch.disable": "true"}

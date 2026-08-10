@@ -15,9 +15,14 @@ const EMOJI_BY_CATEGORY = Object.fromEntries(
 );
 const DEFAULT_EMOJI = "📍";
 
+/** Réutilisé par ui/poi-list.js pour préfixer chaque entrée de la sidebar du
+ * même emoji que le marqueur affiché sur la carte. */
+export function categoryEmoji(category) {
+  return EMOJI_BY_CATEGORY[category] || DEFAULT_EMOJI;
+}
+
 function poiIcon(category) {
-  const emoji = EMOJI_BY_CATEGORY[category] || DEFAULT_EMOJI;
-  return buildDivIcon(`<div style="font-size:20px;line-height:1;">${emoji}</div>`, {
+  return buildDivIcon(`<div style="font-size:20px;line-height:1;">${categoryEmoji(category)}</div>`, {
     size: [24, 24],
     anchor: [12, 20],
   });
