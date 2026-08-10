@@ -4,6 +4,7 @@ export function renderAvoidZoneList(zones, onRemove) {
   return renderListPanel("avoid-zone-list", zones, {
     renderLabel: (zone) => {
       const label = document.createElement("span");
+      label.className = "list-item-label";
       label.textContent = `Zone (${Math.round(zone.radiusM)} m) — ${zone.lat.toFixed(4)}, ${zone.lon.toFixed(4)}`;
       return label;
     },

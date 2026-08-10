@@ -50,7 +50,15 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
   page.on("request", (req) => {
     if (req.url().includes("/api/routes/compute")) computeCalled = true;
   });
-  await page.locator("#saved-routes-list li", { hasText: ROUTE_NAME }).click();
+  // Cible le libellé précisément (comme partout ailleurs dans la suite,
+  // ex. route-edit.spec.js cible son bouton "✎") plutôt que le <li> entier :
+  // avec 5 icônes d'action alignées à droite, le centre géométrique du <li>
+  // (utilisé par un .click() générique) ne tombe pas forcément sur le texte
+  // cliquable.
+  await page
+    .locator("#saved-routes-list li", { hasText: ROUTE_NAME })
+    .locator(".list-item-label")
+    .click();
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
   expect(computeCalled).toBe(false);
 
