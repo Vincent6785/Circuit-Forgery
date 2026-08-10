@@ -1,0 +1,19 @@
+# Override à combiner avec docker-compose.yml pour utiliser les images
+# publiées (ghcr.io) au lieu de builder localement — évite d'avoir besoin de
+# Node/Docker Buildx pour le build du frontend, économise le temps de build.
+# Ne remplace pas le reste (volumes, ports, healthchecks, environnement) :
+# hérité tel quel de docker-compose.yml, seule l'image change.
+#
+# Usage :
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+#
+# Toujours nécessaire malgré les images publiées (non embarqué dedans) :
+# graphhopper/config.yml, graphhopper/custom_models/, et les données OSM via
+# scripts/download-osm-data.sh — voir la section "Images publiées" du README.
+services:
+  graphhopper:
+    image: ghcr.io/vincent6785/circuit-forgery-graphhopper:latest
+
+  backend:
+    image: ghcr.io/vincent6785/circuit-forgery-backend:latest
