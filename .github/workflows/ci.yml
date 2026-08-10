@@ -1,13 +1,14 @@
 name: CI
 
-# Se déclenche sur toute PR (donne aux relecteurs un signal avant
-# d'approuver — jusqu'ici absent, seul publish-docker.yml exécutait ces
-# tests, et seulement après le merge sur main) et sur push, pour garder un
-# signal sur dev/main eux-mêmes.
+# Se déclenche sur toute PR et sur push vers dev. Le passage par main est
+# couvert via workflow_call : publish-docker.yml appelle ce workflow au lieu
+# de dupliquer ses jobs, donc pas de trigger push:main ici (double run sinon,
+# une fois directement et une fois via cet appel).
 on:
   pull_request:
   push:
-    branches: [dev, main]
+    branches: [dev]
+  workflow_call:
 
 jobs:
   test:
@@ -35,3 +36,27 @@ jobs:
           cd frontend
           npm install
           npm run lint
+
+  docker-build:
+    # Construit les deux images sans les publier : garde-fou avant merge
+    # pour la catégorie de bug déjà rencontrée une fois (vite manquant,
+    # détecté seulement après le merge sur main car aucun job ne construisait
+    # les images à l'époque de la PR).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build l'image backend (sans push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+
+      - name: Build l'image graphhopper (sans push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./graphhopper
+          push: false

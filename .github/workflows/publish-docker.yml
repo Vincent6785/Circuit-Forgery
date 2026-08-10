@@ -10,34 +10,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    # Garde-fou avant publication : lint + pytest, aucun des deux ne dépend
-    # de GraphHopper. La suite Playwright, elle, nécessite une instance
-    # GraphHopper avec la France entière importée (4,7 Go de PBF, 5 à 60 min
-    # d'import, cf. README) — irréaliste dans ce runner. Reste une
-    # vérification locale avant de merger, comme pratiqué jusqu'ici.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Suite pytest backend
-        run: |
-          cd backend
-          docker run --rm -v "$PWD":/app -w /app python:3.12-slim \
-            bash -c "pip install -q -r requirements-dev.txt && python -m pytest -q"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Lint frontend
-        run: |
-          cd frontend
-          npm install
-          npm run lint
+  checks:
+    # Garde-fou avant publication : réutilise ci.yml (lint, pytest, build à
+    # blanc des deux images) plutôt que de dupliquer ses jobs — un run de
+    # plus ici est redondant avec celui de la PR qui a mené à ce merge, mais
+    # garde une dernière vérification sur l'état réel de main.
+    uses: ./.github/workflows/ci.yml
 
   publish:
-    needs: test
+    needs: checks
     runs-on: ubuntu-latest
     permissions:
       contents: read
