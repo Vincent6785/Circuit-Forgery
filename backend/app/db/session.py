@@ -10,7 +10,16 @@ class Base(DeclarativeBase):
     pass
 
 
-os.makedirs(os.path.dirname(settings.database_path), exist_ok=True)
+def ensure_database_dir(database_path: str) -> None:
+    # os.makedirs("") lève FileNotFoundError : un CF_DATABASE_PATH sans
+    # composante de répertoire (ex. "circuit-forgery.db", chemin relatif
+    # plausible hors Docker) plantait donc dès l'import de ce module.
+    directory = os.path.dirname(database_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+
+ensure_database_dir(settings.database_path)
 
 engine = create_engine(f"sqlite:///{settings.database_path}", connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
