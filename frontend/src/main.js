@@ -36,6 +36,7 @@ const store = createStore({
   speedLimitKmh: null, // seuil personnalisé (20-80), ou null = défaut du profil (80)
   noSpeedLimit: false, // true = profil sans exclusion de vitesse
   pendingForcedPoint: null, // {lat, lon} | null — point de passage pour la prochaine génération de circuit en boucle
+  roundTripVariant: null, // {start: {lat, lon}, distanceM} | null — dernier circuit en boucle généré avec succès, pour "Nouvelle variante"
 });
 
 const history = createHistory();

@@ -86,7 +86,14 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
   document.getElementById("clear-route-btn").addEventListener("click", () => {
     waypointManager.clear();
     store.setState(
-      { editingRouteId: null, avoidZones: [], speedLimitKmh: null, noSpeedLimit: false, pendingForcedPoint: null },
+      {
+        editingRouteId: null,
+        avoidZones: [],
+        speedLimitKmh: null,
+        noSpeedLimit: false,
+        pendingForcedPoint: null,
+        roundTripVariant: null,
+      },
       { silent: true }
     );
     document.getElementById("route-description-input").value = "";
@@ -157,7 +164,14 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
   document.getElementById("cancel-edit-btn").addEventListener("click", () => {
     waypointManager.clear();
     store.setState(
-      { editingRouteId: null, avoidZones: [], speedLimitKmh: null, noSpeedLimit: false, pendingForcedPoint: null },
+      {
+        editingRouteId: null,
+        avoidZones: [],
+        speedLimitKmh: null,
+        noSpeedLimit: false,
+        pendingForcedPoint: null,
+        roundTripVariant: null,
+      },
       { silent: true }
     );
     document.getElementById("route-description-input").value = "";
@@ -182,6 +196,7 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
         speedLimitKmh: route.speed_limit_kmh ?? null,
         noSpeedLimit: route.no_speed_limit || false,
         pendingForcedPoint: null,
+        roundTripVariant: null,
       },
       { silent: true }
     );
@@ -205,6 +220,7 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
         speedLimitKmh: route.speed_limit_kmh ?? null,
         noSpeedLimit: route.no_speed_limit || false,
         pendingForcedPoint: null,
+        roundTripVariant: null,
       },
       { silent: true }
     );
@@ -233,6 +249,7 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
         speedLimitKmh: route.speed_limit_kmh ?? null,
         noSpeedLimit: route.no_speed_limit || false,
         pendingForcedPoint: null,
+        roundTripVariant: null,
       },
       { silent: true }
     );

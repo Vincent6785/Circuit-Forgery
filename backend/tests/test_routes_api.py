@@ -248,6 +248,22 @@ def test_create_route_defaults_no_speed_limit_settings(client):
     assert created["no_speed_limit"] is False
 
 
+def test_create_route_rejects_name_too_long(client):
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    payload["name"] = "x" * 201
+    resp = client.post("/api/routes", json=payload)
+    assert resp.status_code == 422
+
+
+def test_create_route_rejects_oversized_geometry(client):
+    # Backend exposé sans authentification sur le LAN : cette borne empêche
+    # un client de remplir la base avec un champ de plusieurs centaines de Mo.
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    payload["geometry_geojson"] = {"type": "LineString", "coordinates": [[2.35, 48.85]] * 400_000}
+    resp = client.post("/api/routes", json=payload)
+    assert resp.status_code == 422
+
+
 def test_update_route_replaces_speed_limit_settings(client):
     payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
     created = client.post("/api/routes", json=payload).json()
