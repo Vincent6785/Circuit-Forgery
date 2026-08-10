@@ -109,3 +109,14 @@ def test_build_gpx_escapes_special_characters():
     xml = build_gpx('Trajet "spécial" <test> & Cie', waypoints, {"coordinates": []})
     assert "<test>" not in xml
     assert "&lt;test&gt;" in xml
+
+
+def test_build_gpx_strips_illegal_xml_control_characters():
+    # \x0b (VT) est illégal en XML 1.0 : rien ne l'empêche d'atteindre un nom
+    # de trajet ou un label (seule la longueur est validée côté schéma) ; le
+    # GPX produit doit rester valide, ré-importable par parse_gpx lui-même.
+    waypoints = [Waypoint(lat=1.0, lon=1.0, label="A\x0bB"), Waypoint(lat=2.0, lon=2.0, label="C")]
+    xml = build_gpx("Trajet\x0bavec contrôle", waypoints, {"coordinates": []})
+    assert "\x0b" not in xml
+    parsed_waypoints, _ = parse_gpx(xml.encode("utf-8"), max_waypoints=20)
+    assert len(parsed_waypoints) == 2

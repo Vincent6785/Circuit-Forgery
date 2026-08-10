@@ -1,3 +1,4 @@
+import re
 import xml.etree.ElementTree as ET
 
 from defusedxml.common import DefusedXmlException
@@ -9,7 +10,16 @@ from app.services.geo_sampling import subsample
 GPX_NS = "http://www.topografix.com/GPX/1/1"
 
 
+# Caractères de contrôle illégaux en XML 1.0 (hors tabulation/saut de ligne/
+# retour chariot, valides eux) : rien ne les empêche d'atteindre un nom de
+# trajet ou un label de waypoint (seule la longueur est validée côté schéma),
+# et leur présence produirait un .gpx mal formé, rejeté par la plupart des
+# lecteurs XML — y compris le propre import de l'app (defusedxml).
+_XML_ILLEGAL_CONTROL_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
 def _escape(text: str) -> str:
+    text = _XML_ILLEGAL_CONTROL_CHARS.sub("", text)
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 

@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "./http.js";
+
 async function handle(res) {
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
@@ -7,11 +9,11 @@ async function handle(res) {
 }
 
 export function listRoutes() {
-  return fetch("/api/routes").then(handle);
+  return fetchWithTimeout("/api/routes").then(handle);
 }
 
 export function createRoute(route) {
-  return fetch("/api/routes", {
+  return fetchWithTimeout("/api/routes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(route),
@@ -19,7 +21,7 @@ export function createRoute(route) {
 }
 
 export function updateRoute(id, patch) {
-  return fetch(`/api/routes/${id}`, {
+  return fetchWithTimeout(`/api/routes/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -27,5 +29,5 @@ export function updateRoute(id, patch) {
 }
 
 export function deleteRoute(id) {
-  return fetch(`/api/routes/${id}`, { method: "DELETE" }).then(handle);
+  return fetchWithTimeout(`/api/routes/${id}`, { method: "DELETE" }).then(handle);
 }
