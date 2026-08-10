@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "./http.js";
+
 async function handle(res) {
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
@@ -7,11 +9,11 @@ async function handle(res) {
 }
 
 export function listPOI() {
-  return fetch("/api/poi").then(handle);
+  return fetchWithTimeout("/api/poi").then(handle);
 }
 
 export function createPOI(poi) {
-  return fetch("/api/poi", {
+  return fetchWithTimeout("/api/poi", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(poi),
@@ -19,5 +21,5 @@ export function createPOI(poi) {
 }
 
 export function deletePOI(id) {
-  return fetch(`/api/poi/${id}`, { method: "DELETE" }).then(handle);
+  return fetchWithTimeout(`/api/poi/${id}`, { method: "DELETE" }).then(handle);
 }

@@ -264,6 +264,25 @@ def test_create_route_rejects_oversized_geometry(client):
     assert resp.status_code == 422
 
 
+def test_update_route_rejects_waypoints_without_matching_route_data(client):
+    # Régression : distance_m/duration_s/geometry_geojson étaient écrits
+    # inconditionnellement dès que waypoints était fourni, les mettant à None
+    # (ou "null" pour geometry_geojson) si absents de la requête — corrompant
+    # le trajet (GET ultérieur en 500, RouteOut les déclare non-optionnels).
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    created = client.post("/api/routes", json=payload).json()
+
+    resp = client.put(
+        f"/api/routes/{created['id']}",
+        json={"waypoints": [{"lat": 48.87, "lon": 2.37}, {"lat": 48.88, "lon": 2.38}]},
+    )
+    assert resp.status_code == 422
+
+    fetched = client.get(f"/api/routes/{created['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["geometry_geojson"] == payload["geometry_geojson"]
+
+
 def test_update_route_replaces_speed_limit_settings(client):
     payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
     created = client.post("/api/routes", json=payload).json()
