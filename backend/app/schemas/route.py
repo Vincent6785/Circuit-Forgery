@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.config import settings
 
@@ -128,6 +128,21 @@ class RouteUpdate(BaseModel):
     @classmethod
     def _geometry_size(cls, v: Optional[dict]) -> Optional[dict]:
         return v if v is None else _validate_geometry_size(v)
+
+    @model_validator(mode="after")
+    def _waypoints_require_matching_route_data(self) -> "RouteUpdate":
+        # distance_m/duration_s/geometry_geojson décrivent le tracé calculé
+        # pour `waypoints` : les accepter indépendamment permettrait à un
+        # nouveau jeu de waypoints d'écraser silencieusement ces champs à
+        # None (ou geometry_geojson à "null"), corrompant le trajet — tout
+        # GET ultérieur échoue alors (RouteOut les déclare non-optionnels).
+        if self.waypoints is not None and (
+            self.distance_m is None or self.duration_s is None or self.geometry_geojson is None
+        ):
+            raise ValueError(
+                "waypoints doit être fourni avec distance_m, duration_s et geometry_geojson (tracé recalculé)"
+            )
+        return self
 
 
 class RouteOut(BaseModel):

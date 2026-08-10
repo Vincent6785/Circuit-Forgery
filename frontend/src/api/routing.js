@@ -1,5 +1,7 @@
+import { fetchWithTimeout } from "./http.js";
+
 async function _postJson(url, body, fallbackMessage) {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
