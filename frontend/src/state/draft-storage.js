@@ -8,6 +8,7 @@ export function saveDraft(state) {
     speedLimitKmh: state.speedLimitKmh,
     noSpeedLimit: state.noSpeedLimit,
     pendingForcedPoint: state.pendingForcedPoint,
+    roundTripVariant: state.roundTripVariant,
     savedAt: new Date().toISOString(),
   };
   localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -18,7 +19,8 @@ export function loadDraft() {
   if (!raw) return null;
   try {
     return JSON.parse(raw);
-  } catch {
+  } catch (err) {
+    console.warn("Brouillon local illisible, ignoré :", err);
     return null;
   }
 }

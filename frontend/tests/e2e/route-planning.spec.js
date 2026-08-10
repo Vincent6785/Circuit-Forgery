@@ -33,6 +33,15 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
   await expect(savedItem).toBeVisible();
 
   await page.reload();
+
+  // Régression : le brouillon local (draft-autosave.js) n'était pas effacé
+  // après une sauvegarde réussie — au rechargement, le trajet qu'on vient de
+  // sauvegarder réapparaissait comme brouillon non sauvegardé (waypoints
+  // restaurés, mais éditingRouteId absent), invitant à re-cliquer
+  // "Sauvegarder" et créer un doublon en base.
+  await expect(page.locator("#waypoint-list li")).toHaveCount(0);
+  await expect(page.locator("#route-info")).toHaveClass(/hidden/);
+
   await expect(page.locator("#saved-routes-list li", { hasText: ROUTE_NAME })).toBeVisible();
 
   // Cliquer le trajet sauvegardé ne doit PAS déclencher un nouvel appel de

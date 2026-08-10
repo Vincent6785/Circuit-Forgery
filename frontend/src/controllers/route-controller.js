@@ -128,6 +128,10 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
       nameInput.value = "";
       descriptionInput.value = "";
       refreshSavedRoutesList(loadSavedRoute, enterEditMode, duplicateRoute);
+      // Sans ça, le brouillon local (draft-autosave.js) survit à la
+      // sauvegarde : un rechargement de page le restaure comme trajet non
+      // sauvegardé, et re-cliquer "Sauvegarder" crée un doublon en base.
+      clearDraft();
     } catch (err) {
       showRouteError(err.message);
     } finally {
@@ -154,6 +158,7 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
       hideRouteError();
       store.setState({ editingRouteId: null }, { silent: true });
       refreshSavedRoutesList(loadSavedRoute, enterEditMode, duplicateRoute);
+      clearDraft();
     } catch (err) {
       showRouteError(err.message);
     } finally {

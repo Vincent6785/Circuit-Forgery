@@ -12,6 +12,8 @@ def subsample(items: list[T], max_items: int) -> list[T]:
     round-trip."""
     if len(items) <= max_items:
         return items
+    if max_items < 2:
+        return items[:max_items]
     step = (len(items) - 1) / (max_items - 1)
     indices = sorted({round(i * step) for i in range(max_items)})
     return [items[i] for i in indices]
