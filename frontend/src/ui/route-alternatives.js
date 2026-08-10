@@ -27,7 +27,15 @@ export function initRouteAlternatives({ store, routeLayer }) {
   const btn = document.getElementById("show-alternatives-btn");
   const list = document.getElementById("alternatives-list");
 
+  // Garde-fou "dernier appel gagne" (même motif que recomputeSeq dans
+  // route-controller.js) : sans lui, changer les waypoints pendant que la
+  // requête est en vol affiche quand même les alternatives de l'ancienne
+  // paire, et en sélectionner une écrase le tracé courant avec une
+  // géométrie qui ne correspond plus aux waypoints affichés.
+  let requestSeq = 0;
+
   function reset() {
+    requestSeq++;
     list.classList.add("hidden");
     list.innerHTML = "";
   }
@@ -46,15 +54,18 @@ export function initRouteAlternatives({ store, routeLayer }) {
   btn.addEventListener("click", async () => {
     const { waypoints, noSpeedLimit } = store.getState();
     if (waypoints.length !== 2) return;
+    const seq = ++requestSeq;
     btn.disabled = true;
     try {
       const { alternatives } = await computeAlternatives(
         waypoints.map((p) => ({ lat: p.lat, lon: p.lon })),
         noSpeedLimit
       );
+      if (seq !== requestSeq) return;
       hideRouteError();
       _renderOptions(alternatives, store, routeLayer, list);
     } catch (err) {
+      if (seq !== requestSeq) return;
       showRouteError(err.message);
     } finally {
       btn.disabled = false;

@@ -24,7 +24,13 @@ const FORCED_POINT_HINT = "Cliquez le point que le circuit devra traverser…";
  * gratuitement partout où `avoidZones`/`speedLimitKmh` le sont déjà
  * (route-controller.js : effacer, annuler une édition, charger/dupliquer
  * un trajet) — un point de passage laissé actif après un "Effacer les
- * points" serait sinon silencieusement réappliqué à la génération suivante. */
+ * points" serait sinon silencieusement réappliqué à la génération suivante.
+ *
+ * "Nouvelle variante" (régénérer avec les mêmes départ/distance) a besoin
+ * du même traitement : `roundTripVariant` vit aussi dans le store plutôt
+ * que dans une variable locale, pour la même raison — sinon "Nouvelle
+ * variante" resterait activé après un "Effacer les points"/chargement d'un
+ * trajet et régénérerait un circuit sans rapport à la place. */
 export function initRoundTripController({ map, store, waypointManager, recomputeAndRender }) {
   const distanceInput = document.getElementById("round-trip-distance-input");
   const generateBtn = document.getElementById("round-trip-generate-btn");
@@ -37,8 +43,7 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   const cancelBtn = document.getElementById("round-trip-cancel-btn");
 
   let pickingMode = null; // "start" | "forced-point" | null
-  let lastStart = null;
-  let lastDistanceM = null;
+  let pendingDistanceM = null; // distance saisie, en attente du clic qui fournira le point de départ
   let forcedPointMarker = null;
 
   function stopPicking() {
@@ -78,6 +83,9 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   }
 
   store.subscribe((state) => renderForcedPoint(state.pendingForcedPoint));
+  store.subscribe((state) => {
+    variantBtn.disabled = !state.roundTripVariant;
+  });
 
   async function generateFrom(lat, lon, distanceM, seed) {
     generateBtn.disabled = true;
@@ -115,9 +123,7 @@ export function initRoundTripController({ map, store, waypointManager, recompute
           { type: "info" }
         );
       }
-      lastStart = { lat, lon };
-      lastDistanceM = distanceM;
-      variantBtn.disabled = false;
+      store.setState({ roundTripVariant: { start: { lat, lon }, distanceM } }, { silent: true });
     } catch (err) {
       showRouteError(err.message);
     } finally {
@@ -131,7 +137,7 @@ export function initRoundTripController({ map, store, waypointManager, recompute
       showRouteError("Distance de circuit invalide.");
       return;
     }
-    lastDistanceM = km * 1000;
+    pendingDistanceM = km * 1000;
     pickingMode = "start";
     waypointManager.setAddOnMapClickEnabled(false);
     hintText.textContent = START_HINT;
@@ -150,7 +156,7 @@ export function initRoundTripController({ map, store, waypointManager, recompute
     const mode = pickingMode;
     stopPicking();
     if (mode === "start") {
-      generateFrom(e.latlng.lat, e.latlng.lng, lastDistanceM);
+      generateFrom(e.latlng.lat, e.latlng.lng, pendingDistanceM);
     } else {
       store.setState({ pendingForcedPoint: { lat: e.latlng.lat, lon: e.latlng.lng } }, { silent: true });
     }
@@ -172,8 +178,9 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   });
 
   variantBtn.addEventListener("click", () => {
-    if (!lastStart || !lastDistanceM) return;
+    const { roundTripVariant } = store.getState();
+    if (!roundTripVariant) return;
     const seed = Math.floor(Math.random() * 1_000_000);
-    generateFrom(lastStart.lat, lastStart.lon, lastDistanceM, seed);
+    generateFrom(roundTripVariant.start.lat, roundTripVariant.start.lon, roundTripVariant.distanceM, seed);
   });
 }

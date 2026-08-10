@@ -1,9 +1,24 @@
+import json
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import settings
+
+# Backend exposé sans authentification sur le LAN (limitation documentée,
+# README) : ces bornes ne sont pas des limites métier mais un garde-fou bon
+# marché contre un client qui remplirait la base avec des champs de
+# plusieurs centaines de Mo. 5 Mo pour une géométrie est très large : même
+# un tracé long (plusieurs centaines de km) tient sur quelques centaines de
+# Ko une fois sérialisé.
+_MAX_GEOMETRY_BYTES = 5_000_000
+
+
+def _validate_geometry_size(v: dict) -> dict:
+    if len(json.dumps(v)) > _MAX_GEOMETRY_BYTES:
+        raise ValueError(f"geometry_geojson dépasse la taille maximale autorisée ({_MAX_GEOMETRY_BYTES} octets)")
+    return v
 
 
 class Waypoint(BaseModel):
@@ -67,8 +82,8 @@ class AlternativesResponse(BaseModel):
 
 
 class RouteCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
+    name: str = Field(max_length=200)
+    description: Optional[str] = Field(default=None, max_length=2000)
     waypoints: list[Waypoint] = Field(min_length=2)
     distance_m: float
     duration_s: float
@@ -80,10 +95,15 @@ class RouteCreate(BaseModel):
     speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
     no_speed_limit: bool = False
 
+    @field_validator("geometry_geojson")
+    @classmethod
+    def _geometry_size(cls, v: dict) -> dict:
+        return _validate_geometry_size(v)
+
 
 class RouteUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=2000)
     is_favorite: Optional[bool] = None
     # Présent seulement en édition, pour remplacer le tracé d'un trajet déjà
     # sauvegardé. Le recalcul GraphHopper a lieu côté frontend (POST /compute)
@@ -103,6 +123,11 @@ class RouteUpdate(BaseModel):
         if v is not None and len(v) < 2:
             raise ValueError("Un trajet doit contenir au moins 2 points")
         return v
+
+    @field_validator("geometry_geojson")
+    @classmethod
+    def _geometry_size(cls, v: Optional[dict]) -> Optional[dict]:
+        return v if v is None else _validate_geometry_size(v)
 
 
 class RouteOut(BaseModel):
@@ -132,11 +157,11 @@ class GeocodeResult(BaseModel):
 
 
 class PointOfInterestCreate(BaseModel):
-    name: str
+    name: str = Field(max_length=200)
     lat: float
     lon: float
-    category: Optional[str] = None
-    notes: Optional[str] = None
+    category: Optional[str] = Field(default=None, max_length=100)
+    notes: Optional[str] = Field(default=None, max_length=2000)
 
 
 class PointOfInterestOut(PointOfInterestCreate):
