@@ -1,0 +1,37 @@
+name: CI
+
+# Se déclenche sur toute PR (donne aux relecteurs un signal avant
+# d'approuver — jusqu'ici absent, seul publish-docker.yml exécutait ces
+# tests, et seulement après le merge sur main) et sur push, pour garder un
+# signal sur dev/main eux-mêmes.
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+
+jobs:
+  test:
+    # Lint + pytest, aucun des deux ne dépend de GraphHopper. La suite
+    # Playwright, elle, nécessite une instance GraphHopper avec la France
+    # entière importée (4,7 Go de PBF, 5 à 60 min d'import, cf. README) —
+    # irréaliste dans ce runner. Reste une vérification locale avant de
+    # merger, comme pratiqué jusqu'ici.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Suite pytest backend
+        run: |
+          cd backend
+          docker run --rm -v "$PWD":/app -w /app python:3.12-slim \
+            bash -c "pip install -q -r requirements-dev.txt && python -m pytest -q"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Lint frontend
+        run: |
+          cd frontend
+          npm install
+          npm run lint
