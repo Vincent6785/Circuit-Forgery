@@ -237,6 +237,28 @@ test("Effacer les points retire aussi un point de passage en attente", async ({ 
   expect(hasForcedPoint).toBe(false);
 });
 
+test("Effacer les points désactive Nouvelle variante et régénère avec le bon point de départ après", async ({
+  page,
+}) => {
+  // Régression : lastStart/lastDistanceM vivaient en variables locales au
+  // contrôleur round-trip, invisibles du reset fait par "Effacer les
+  // points" (même classe de bug que le point de passage juste au-dessus) —
+  // "Nouvelle variante" restait activé et régénérait un circuit sans
+  // rapport avec l'ancien point de départ, écrasant silencieusement ce qui
+  // venait d'être effacé.
+  await setupParisView(page);
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
+  await expect(page.locator("#round-trip-variant-btn")).toBeEnabled();
+
+  await page.locator("#clear-route-btn").click();
+  await expect(page.locator("#round-trip-variant-btn")).toBeDisabled();
+  await expect(page.locator("#waypoint-list li")).toHaveCount(0);
+});
+
 test("inverser le sens inverse l'ordre des waypoints", async ({ page }) => {
   await setupParisView(page);
   await clickMapAt(page, 48.8566, 2.3522);

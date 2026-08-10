@@ -1,4 +1,5 @@
 import { searchAddress } from "../api/geocode.js";
+import { showRouteError } from "./sidebar.js";
 
 const DEBOUNCE_MS = 350;
 
@@ -25,7 +26,9 @@ export function initAddressSearch(onSelect) {
       let items;
       try {
         items = await searchAddress(query);
-      } catch {
+      } catch (err) {
+        if (seq !== requestSeq) return; // une frappe plus récente a déjà lancé une recherche plus fraîche
+        showRouteError(err.message);
         return;
       }
       if (seq !== requestSeq) return; // une frappe plus récente a déjà lancé une recherche plus fraîche
