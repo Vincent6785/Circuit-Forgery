@@ -72,6 +72,7 @@ async def compute_route(body: ComputeRouteRequest):
 @router.post("/round-trip", response_model=ComputeRouteResponse)
 async def compute_round_trip(body: RoundTripRequest):
     validate_waypoints([body.start])
+    validate_avoid_zones(body.avoid_zones)
     if body.distance_m > settings.max_round_trip_distance_m:
         raise HTTPException(400, f"Distance de circuit trop grande (max {settings.max_round_trip_distance_m} m)")
     try:
@@ -79,6 +80,7 @@ async def compute_round_trip(body: RoundTripRequest):
             (body.start.lat, body.start.lon),
             body.distance_m,
             body.seed,
+            avoid_zones=body.avoid_zones or None,
             speed_limit_kmh=body.speed_limit_kmh,
             no_speed_limit=body.no_speed_limit,
         )

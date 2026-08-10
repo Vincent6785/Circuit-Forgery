@@ -19,6 +19,21 @@ async function clickMapAt(page, lat, lon) {
   await page.mouse.click(box.x + point.x, box.y + point.y);
 }
 
+async function dragZone(page, centerLat, centerLon, edgeLat, edgeLon) {
+  const [centerPoint, edgePoint] = await page.evaluate(
+    ([c, e]) => [window.__map.latLngToContainerPoint(c), window.__map.latLngToContainerPoint(e)],
+    [
+      [centerLat, centerLon],
+      [edgeLat, edgeLon],
+    ]
+  );
+  const box = await page.locator("#map").boundingBox();
+  await page.mouse.move(box.x + centerPoint.x, box.y + centerPoint.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + edgePoint.x, box.y + edgePoint.y, { steps: 5 });
+  await page.mouse.up();
+}
+
 // Le seed de round_trip n'est pas garanti reproductible à l'identique d'une
 // version de GraphHopper à l'autre : on vérifie ici le contrat (≥2
 // waypoints, distance proche de la cible, tracé fermé), pas l'exactitude
@@ -257,6 +272,32 @@ test("Effacer les points désactive Nouvelle variante et régénère avec le bon
   await page.locator("#clear-route-btn").click();
   await expect(page.locator("#round-trip-variant-btn")).toBeDisabled();
   await expect(page.locator("#waypoint-list li")).toHaveCount(0);
+});
+
+test("générer un circuit en boucle avec une zone à éviter active ne plante pas", async ({ page }) => {
+  // Régression : RoundTripRequest n'avait pas de champ avoid_zones, la
+  // génération de circuit ignorait totalement les zones à éviter déjà
+  // définies — jamais exercé par un test e2e avant ce cas, seul un test
+  // unitaire mocké couvrait le nouveau champ.
+  await setupParisView(page);
+
+  await page.locator("#avoid-zone-toggle-btn").click();
+  await dragZone(page, 48.865, 2.325, 48.868, 2.328);
+  await expect(page.locator("#avoid-zone-list li")).toHaveCount(1);
+  // Le mode dessin reste actif après une zone (pour en enchaîner plusieurs) :
+  // le désactiver explicitement, sinon le clic de génération ci-dessous
+  // dessinerait une seconde zone au lieu de fixer le point de départ.
+  await page.locator("#avoid-zone-toggle-btn").click();
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await clickMapAt(page, 48.8566, 2.3522);
+
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
+  const banner = page.locator("#route-error");
+  await expect(banner).not.toHaveClass(/error/);
+  const waypoints = await page.evaluate(() => window.__getWaypoints());
+  expect(waypoints.length).toBeGreaterThanOrEqual(2);
 });
 
 test("inverser le sens inverse l'ordre des waypoints", async ({ page }) => {

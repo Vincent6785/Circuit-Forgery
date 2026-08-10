@@ -1,10 +1,16 @@
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.config import settings
+
+# Répété dans 4 schémas (compute, round-trip, création, mise à jour) : un
+# type partagé évite qu'un futur ajustement de la plage 20-80 n'oublie l'un
+# des quatre, acceptant alors silencieusement une valeur qu'un autre schéma
+# rejetterait.
+SpeedLimitKmh = Annotated[Optional[float], Field(default=None, ge=20, le=80)]
 
 # Backend exposé sans authentification sur le LAN (limitation documentée,
 # README) : ces bornes ne sont pas des limites métier mais un garde-fou bon
@@ -39,7 +45,7 @@ class ComputeRouteRequest(BaseModel):
     # None = comportement par défaut du profil (80 km/h). Une valeur ne peut
     # qu'abaisser ce seuil (20 à 80) : le relever nécessite no_speed_limit,
     # cf. services/avoid_zone.py::build_custom_model pour la raison.
-    speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
+    speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: bool = False
 
 
@@ -65,7 +71,8 @@ class RoundTripRequest(BaseModel):
     start: Waypoint
     distance_m: float = Field(gt=0)
     seed: Optional[int] = None
-    speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
+    avoid_zones: list[AvoidZone] = []
+    speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: bool = False
 
 
@@ -92,7 +99,7 @@ class RouteCreate(BaseModel):
     # compute_route s'appuie toujours sur settings.graphhopper_profile.
     profile: str = settings.graphhopper_profile
     avoid_zones: Optional[list[AvoidZone]] = None
-    speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
+    speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: bool = False
 
     @field_validator("geometry_geojson")
@@ -114,7 +121,7 @@ class RouteUpdate(BaseModel):
     duration_s: Optional[float] = None
     geometry_geojson: Optional[dict] = None
     avoid_zones: Optional[list[AvoidZone]] = None
-    speed_limit_kmh: Optional[float] = Field(default=None, ge=20, le=80)
+    speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: Optional[bool] = None
 
     @field_validator("waypoints")

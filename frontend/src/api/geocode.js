@@ -1,10 +1,5 @@
-import { fetchWithTimeout } from "./http.js";
+import { apiFetch } from "./http.js";
 
-export async function searchAddress(query) {
-  const res = await fetchWithTimeout(`/api/geocode?q=${encodeURIComponent(query)}`);
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}));
-    throw new Error(detail.detail || `Erreur de recherche d'adresse (${res.status})`);
-  }
-  return res.json();
+export function searchAddress(query) {
+  return apiFetch(`/api/geocode?q=${encodeURIComponent(query)}`, {}, "Erreur de recherche d'adresse");
 }

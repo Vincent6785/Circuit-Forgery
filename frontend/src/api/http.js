@@ -19,3 +19,17 @@ export async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TI
     clearTimeout(timer);
   }
 }
+
+/** fetchWithTimeout() + vérification du statut + extraction du message
+ * d'erreur, communes aux cinq modules d'API — trois variantes légèrement
+ * différentes du même motif à 6 lignes existaient avant cette centralisation
+ * (poi.js/saved-routes.js identiques, geocode.js/gpx.js sans la branche 204,
+ * routing.js une troisième fois dans _postJson). */
+export async function apiFetch(url, options = {}, fallbackMessage = "Erreur API") {
+  const res = await fetchWithTimeout(url, options);
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail || `${fallbackMessage} (${res.status})`);
+  }
+  return res.status === 204 ? null : res.json();
+}
