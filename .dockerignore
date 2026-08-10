@@ -1,0 +1,39 @@
+# Contexte de build Docker (backend/Dockerfile utilise "context: ." = racine
+# du dépôt) : sans ce fichier, docker build/compose envoie tout au démon,
+# y compris data/osm/ (plusieurs Go de PBF) et .git/, alors que le Dockerfile
+# ne copie jamais que frontend/ et backend/app.
+
+.git/
+.claude/
+
+# OSM data
+data/
+
+# GraphHopper compiled graph cache
+graphhopper/graph-cache/
+data/graph-cache/
+
+# SQLite database
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node / frontend build
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.cache/
+
+# Env files
+.env
