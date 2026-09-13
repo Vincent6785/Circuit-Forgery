@@ -35,8 +35,9 @@ server:
     - type: http
       port: 8989
       # 0.0.0.0 est nécessaire pour que le service backend (autre conteneur) puisse joindre
-      # GraphHopper via le réseau docker-compose. L'isolation vis-à-vis du LAN/host est assurée
-      # en NE PUBLIANT PAS ce port dans docker-compose.yml (pas de mapping "ports:"), pas par ce bind.
+      # GraphHopper via le réseau docker-compose. L'isolation vis-à-vis du LAN est assurée par
+      # docker-compose.yml, qui ne publie ce port que sur la boucle locale de l'hôte
+      # (127.0.0.1:8989), pas par ce bind.
       bind_host: 0.0.0.0
   admin_connectors:
     - type: http

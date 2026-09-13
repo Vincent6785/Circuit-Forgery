@@ -1,14 +1,26 @@
+# Rotation des journaux : le pilote json-file par défaut les laisse sinon grossir
+# indéfiniment sur une machine qui tourne en continu.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   graphhopper:
     build: ./graphhopper
     environment:
-      # Ajuster selon la RAM disponible sur la machine (8-16g recommandé pour la France entière)
-      - JAVA_OPTS=-Xmx16g
+      # Ajuster -Xmx selon la RAM disponible sur la machine (8-16g recommandé pour la
+      # France entière, même valeur par défaut que graphhopper/Dockerfile).
+      # -XX:+ExitOnOutOfMemoryError : une JVM à court de mémoire s'arrête (puis redémarre
+      # via restart:) au lieu de rester à moitié fonctionnelle.
+      - JAVA_OPTS=-Xmx16g -XX:+ExitOnOutOfMemoryError
     volumes:
       - ./graphhopper/config.yml:/config/config.yml:ro
       - ./graphhopper/custom_models:/config/custom_models:ro
       - ./data/osm:/data:ro
       - graph-cache:/graph-cache
+    logging: *default-logging
     ports:
       # Loopback uniquement (debug local) : le backend joint GraphHopper via le réseau
       # docker-compose interne (nom de service "graphhopper"), pas via ce port publié.
@@ -37,6 +49,7 @@ services:
       - CF_DATABASE_PATH=/data/circuit-forgery.db
     volumes:
       - ./backend/data:/data
+    logging: *default-logging
     ports:
       # 0.0.0.0 côté conteneur + publication sur toutes les interfaces hôte :
       # c'est le seul service exposé au LAN (cf. Phase 7 du plan).

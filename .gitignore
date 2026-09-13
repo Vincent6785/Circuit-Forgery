@@ -16,6 +16,7 @@ backend/data/*.db-shm
 __pycache__/
 *.pyc
 .venv/
+.pytest_cache/
 *.egg-info/
 
 # Node / frontend build

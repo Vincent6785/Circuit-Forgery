@@ -226,11 +226,22 @@ GraphHopper (port 8989) n'est publié que sur `127.0.0.1` : il n'est
 joignable ni depuis le LAN ni depuis l'extérieur, seul le backend proxy
 l'est.
 
+Les deux conteneurs s'exécutent sans privilèges root. Leur script de
+démarrage remet d'abord à l'utilisateur dédié (`app`, UID 1000, pour le
+backend ; `graphhopper`, UID 10001) la propriété des données créées par une
+version antérieure qui tournait en root (`./backend/data`, volume
+`graph-cache`), puis abandonne ces privilèges — une installation existante
+se met donc à jour sans manipulation. Si l'utilisateur de l'hôte
+propriétaire de `./backend/data` n'a pas l'UID 1000, construire l'image
+backend avec `--build-arg APP_UID=<uid> --build-arg APP_GID=<gid>`.
+
 ### Images publiées
 
 `.github/workflows/publish-docker.yml` construit et publie automatiquement
 les images `backend` et `graphhopper` sur GitHub Container Registry à
-chaque mise à jour de `main` (tags `latest` et `<sha du commit>`) :
+chaque mise à jour de `main` (tags `latest` et `<sha du commit>`) et à
+chaque tag de version `vX.Y.Z` (tags `X.Y.Z` et `X.Y`), avec attestation de
+provenance et SBOM (voir [CHANGELOG.md](CHANGELOG.md)) :
 
 ```
 ghcr.io/vincent6785/circuit-forgery-backend:latest
@@ -268,6 +279,13 @@ stack telle quelle sur une machine directement joignable depuis Internet
 (VM cloud, port forwarding) sans ajouter sa propre authentification
 (reverse proxy, VPN...) devant.
 
+Attention aussi au pare-feu de l'hôte : les ports publiés par Docker
+contournent les règles `ufw`/`firewalld` (Docker insère ses propres règles
+iptables). Pour restreindre l'accès au backend, limiter la publication du
+port dans `docker-compose.yml` — par exemple `"127.0.0.1:8000:8000"` derrière
+un reverse proxy — plutôt que de compter sur le pare-feu. Voir
+[SECURITY.md](SECURITY.md) pour signaler une vulnérabilité.
+
 ## Configuration
 
 Le backend se configure par variables d'environnement, préfixées `CF_`
@@ -287,9 +305,11 @@ ajuster :
 | `CF_MAX_GPX_UPLOAD_BYTES` | `5000000` | Taille maximale d'un fichier GPX importé |
 | `CF_MAX_REQUEST_BODY_BYTES` | `10000000` | Taille maximale d'un corps de requête, refusée en 413 avant sa lecture complète |
 | `CF_LOG_LEVEL` | `INFO` | Niveau des journaux du backend (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
-
-Sondes de santé du backend : `/api/health/live` (le serveur répond, utilisée par le healthcheck Docker), `/api/health/ready` (503 tant que GraphHopper ou la base ne répondent pas) et `/api/health` (état détaillé, toujours 200).
 | `CF_NOMINATIM_URL` | `https://nominatim.openstreetmap.org` | Serveur Nominatim utilisé pour la recherche d'adresse |
+
+Sondes de santé du backend : `/api/health/live` (le serveur répond, utilisée
+par le healthcheck Docker), `/api/health/ready` (503 tant que GraphHopper ou
+la base ne répondent pas) et `/api/health` (état détaillé, toujours 200).
 
 La heap JVM de GraphHopper se règle séparément via `JAVA_OPTS` dans
 `docker-compose.yml` (service `graphhopper`) — voir
@@ -370,7 +390,8 @@ plus ciblés que la suite Playwright pour ces cas-là.
 ```bash
 cd backend
 docker run --rm -v "$PWD":/app -w /app python:3.12-slim \
-  bash -c "pip install -q -r requirements-dev.txt && python -m pytest -q"
+  bash -c "pip install -q --require-hashes --no-deps -r requirements.lock \
+    && pip install -q -r requirements-dev.txt && python -m pytest -q"
 ```
 
 Passer par Docker plutôt qu'un virtualenv local garantit la même version de
@@ -386,6 +407,17 @@ python3 -m venv .venv
 .venv/bin/python -m pytest
 ```
 
+Les dépendances de production sont figées, dépendances transitives et
+hashes compris, dans `requirements.lock`, installé par l'image Docker avec
+`pip install --require-hashes`. Après toute modification de
+`requirements.txt`, le régénérer (la CI vérifie qu'il est à jour) :
+
+```bash
+cd backend
+uvx --from uv uv pip compile requirements.txt --generate-hashes \
+  --python-version 3.12 --python-platform x86_64-manylinux_2_28 --no-header -o requirements.lock
+```
+
 ## Maintenance des données OSM
 
 ```bash
@@ -395,6 +427,15 @@ python3 -m venv .venv
 Pas d'automatisation en cron : l'import complet de la France consomme
 beaucoup de RAM et prend plusieurs minutes, mieux vaut le déclencher
 consciemment.
+
+Le nouvel extrait est téléchargé (avec reprise en cas de coupure) et vérifié
+avant l'arrêt de GraphHopper : l'interruption de service se limite au
+réimport, et un téléchargement en échec laisse l'extrait et le service en
+place. L'extrait précédent est conservé
+(`data/osm/france-latest.osm.pbf.previous`), et la date des données
+importées est consignée dans `data/osm/france-latest.osm.pbf.info`
+(attribution ODbL). Avec les images publiées :
+`COMPOSE_FILES="-f docker-compose.yml -f docker-compose.images.yml" ./scripts/update-osm-data.sh`.
 
 ## Points de vigilance
 
@@ -476,8 +517,12 @@ régression par `frontend/tests/e2e/route-error-handling.spec.js`.
 ### Dépannage import (RAM)
 
 `JAVA_OPTS` dans `docker-compose.yml` (service `graphhopper`) contrôle la
-heap JVM (`-Xmx`). Prévoir 8-16 Go pour la France entière ; augmenter si
-`OutOfMemoryError` pendant l'import.
+heap JVM (`-Xmx`, 16 Go par défaut, même valeur que l'image). Prévoir
+8-16 Go pour la France entière ; augmenter si `OutOfMemoryError` pendant
+l'import. `-XX:+ExitOnOutOfMemoryError` arrête la JVM au premier manque de
+mémoire (le conteneur redémarre alors) plutôt que de la laisser à moitié
+fonctionnelle. La JVM consomme aussi de la mémoire hors heap : garder une
+marge de quelques Go sur la machine.
 
 ## État des vérifications
 
