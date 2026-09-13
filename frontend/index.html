@@ -121,7 +121,8 @@
 
             <h3>Zones à éviter</h3>
             <p class="hint">Activez le mode puis glissez sur la carte (centre → rayon) pour dessiner une zone à contourner.</p>
-            <button id="avoid-zone-toggle-btn" aria-pressed="false">🚫 Éviter une zone</button>
+            <button id="avoid-zone-toggle-btn" type="button" aria-pressed="false">🚫 Éviter une zone</button>
+            <p id="avoid-zone-draw-hint" class="hint hidden" role="status">Glissez sur la carte pour dessiner une zone (centre → rayon).</p>
             <input
               type="number"
               id="avoid-zone-radius-input"
@@ -169,7 +170,7 @@
       </div>
 
       <footer class="sidebar-footer">
-        <div id="route-error" class="panel hidden" role="alert"></div>
+        <div id="route-error" class="panel hidden" role="alert" aria-live="polite"></div>
 
         <div id="route-info" class="panel hidden">
           <h2>Trajet</h2>

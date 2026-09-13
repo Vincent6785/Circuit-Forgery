@@ -11,6 +11,7 @@ function storage() {
   }
 }
 
+/** @param {Record<string, any>} state */
 export function serializeDraft(state) {
   return {
     waypoints: state.waypoints,
@@ -30,7 +31,10 @@ export function serializeDraft(state) {
 
 /** Écrit le brouillon ; renvoie false s'il n'a pas pu l'être. En cas de
  * quota dépassé, retente sans le tracé calculé — de loin la partie la plus
- * volumineuse, et recalculée à la restauration. */
+ * volumineuse, et recalculée à la restauration.
+ *
+ * @param {Record<string, any>} state
+ */
 export function saveDraft(state) {
   const store = storage();
   if (!store) return false;

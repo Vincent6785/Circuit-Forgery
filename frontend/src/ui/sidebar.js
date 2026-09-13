@@ -11,10 +11,13 @@ export function hideRouteInfo() {
 
 /** Bandeau générique (erreur ou information) qui réutilise le même
  * emplacement inline, à la place des popups navigateur bloquantes
- * (alert/confirm) pour les messages non critiques. */
+ * (alert/confirm) pour les messages non critiques. Une erreur est annoncée
+ * immédiatement par les lecteurs d'écran (role="alert") ; une information,
+ * sans interrompre (role="status"). */
 export function showBanner(message, { type = "error" } = {}) {
   const el = document.getElementById("route-error");
   el.textContent = message;
+  el.setAttribute("role", type === "error" ? "alert" : "status");
   el.classList.remove("hidden", "error", "info");
   el.classList.add(type);
 }

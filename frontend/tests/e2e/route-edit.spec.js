@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, collectPageErrors, openTab } from "./helpers.js";
+import { clickMapAt, collectPageErrors, confirmDelete, openTab } from "./helpers.js";
 
 const ROUTE_NAME = "Trajet Playwright Edit Test";
 
@@ -82,6 +82,10 @@ test("annulation d'une édition ne modifie pas le trajet sauvegardé", async ({ 
   await expect(savedItem).toBeVisible();
 
   await savedItem.locator("button", { hasText: "✎" }).click();
+  // L'ouverture charge le détail du trajet de façon asynchrone : attendre
+  // qu'il soit affiché, sinon le point cliqué serait remplacé au chargement.
+  await expect(page.locator("#update-route-btn")).toBeVisible();
+  await expect(page.locator("#waypoint-list li")).toHaveCount(2);
   await clickMapAt(page, POINT_C.lat, POINT_C.lon);
   await expect(page.locator("#waypoint-list li")).toHaveCount(3);
 
@@ -111,8 +115,7 @@ test("supprimer le trajet en cours de modification quitte le mode modification",
   await expect(page.locator("#update-route-btn")).toBeVisible();
 
   await openTab(page, "saved");
-  page.once("dialog", (dialog) => dialog.accept());
-  await savedItem.locator("button", { hasText: "✕" }).click();
+  await confirmDelete(savedItem.locator('button[data-action="delete"]'));
   await expect(savedItem).toHaveCount(0);
 
   await expect(page.locator("#update-route-btn")).toBeHidden();
@@ -158,6 +161,9 @@ test("rouvrir un trajet sauvegardé affiche son tracé même si le recalcul éch
   await expect(page.locator("#route-distance")).toHaveText(`${(saved.distance_m / 1000).toFixed(1)} km`);
   await expect(page.locator("#route-error")).toHaveClass(/hidden/);
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
+  // Un trajet rouvert n'est pas une modification : aucun brouillon n'est écrit.
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => localStorage.getItem("circuit-forgery:draft:v1"))).toBeNull();
 
   await request.delete(`/api/routes/${saved.id}`);
 });

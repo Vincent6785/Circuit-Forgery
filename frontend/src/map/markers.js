@@ -30,9 +30,9 @@ function newId() {
  * Gère les waypoints d'un trajet : marqueurs sur la carte, et état reflété
  * dans le store (clé "waypoints"). Chaque mutation utilisateur (ajout,
  * suppression, déplacement, réorganisation) notifie le store en mode
- * non-silencieux, ce qui déclenche recalcul et autosave chez les abonnés ;
- * setPointsSilently — aperçu d'un trajet sauvegardé, restauration de
- * brouillon — notifie au contraire en mode silencieux.
+ * comme changement utilisateur (userChange), ce qui déclenche recalcul et
+ * autosave chez les abonnés ; setPointsSilently — aperçu d'un trajet
+ * sauvegardé, restauration de brouillon — notifie au contraire sans ce drapeau.
  *
  * L'historique undo/redo (state/history.js) est partagé avec les zones à
  * éviter : controllers/avoid-zone-controller.js y pousse aussi ses propres
@@ -107,7 +107,7 @@ export class WaypointManager {
     this._points = snapshot.waypoints;
     this._selectedId = null;
     this._render();
-    this._store.setState({ waypoints: this.getPoints(), avoidZones: snapshot.avoidZones }, { silent: false });
+    this._store.setState({ waypoints: this.getPoints(), avoidZones: snapshot.avoidZones }, { userChange: true });
   }
 
   undo() {
@@ -148,7 +148,7 @@ export class WaypointManager {
     this._points.splice(clamped, 0, { id: newId(), lat, lon, label });
     this._selectedId = null;
     this._render();
-    this._notify(false);
+    this._notify(true);
   }
 
   removePoint(id) {
@@ -156,7 +156,7 @@ export class WaypointManager {
     this._points = this._points.filter((p) => p.id !== id);
     if (this._selectedId === id) this._selectedId = null;
     this._render();
-    this._notify(false);
+    this._notify(true);
   }
 
   updatePoint(id, lat, lon) {
@@ -166,7 +166,7 @@ export class WaypointManager {
     point.lat = lat;
     point.lon = lon;
     this._render();
-    this._notify(false);
+    this._notify(true);
   }
 
   renamePoint(id, label) {
@@ -183,14 +183,14 @@ export class WaypointManager {
     if (lon !== undefined) point.lon = lon;
     if (label !== undefined) point.label = label || null;
     this._render();
-    this._notify(false);
+    this._notify(true);
   }
 
   reverseAll() {
     this._pushHistory();
     this._points.reverse();
     this._render();
-    this._notify(false);
+    this._notify(true);
   }
 
   reorder(fromIndex, toIndex) {
@@ -207,7 +207,7 @@ export class WaypointManager {
     const [moved] = this._points.splice(fromIndex, 1);
     this._points.splice(toIndex, 0, moved);
     this._render();
-    this._notify(false);
+    this._notify(true);
   }
 
   replaceAll(points) {
@@ -215,7 +215,7 @@ export class WaypointManager {
     this._points = points.map((p) => ({ id: newId(), lat: p.lat, lon: p.lon, label: p.label ?? null }));
     this._selectedId = null;
     this._render();
-    this._notify(false);
+    this._notify(true);
   }
 
   clear() {
@@ -223,7 +223,7 @@ export class WaypointManager {
     this._points = [];
     this._selectedId = null;
     this._render();
-    this._notify(false);
+    this._notify(true);
   }
 
   /** Positionne les marqueurs en mode silencieux, sans déclencher de recalcul
@@ -238,7 +238,7 @@ export class WaypointManager {
     this._selectedId = null;
     this._history.reset();
     this._render();
-    this._notify(true);
+    this._notify(false);
   }
 
   selectPoint(id) {
@@ -266,8 +266,8 @@ export class WaypointManager {
     return this._addOnMapClick;
   }
 
-  _notify(silent) {
-    this._store.setState({ waypoints: this.getPoints() }, { silent });
+  _notify(userChange) {
+    this._store.setState({ waypoints: this.getPoints() }, { userChange });
   }
 
   _pointForMarker(marker) {

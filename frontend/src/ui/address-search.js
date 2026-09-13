@@ -1,4 +1,5 @@
 import { searchAddress } from "../api/geocode.js";
+import { createLatestRequest } from "../api/latest-request.js";
 import { showRouteError } from "./sidebar.js";
 
 const DEBOUNCE_MS = 350;
@@ -18,7 +19,7 @@ export const MIN_QUERY_LENGTH = 3;
  */
 export function initAddressSearch({ input, results, onSelect, onCancel }) {
   let debounceTimer = null;
-  let requestSeq = 0;
+  const request = createLatestRequest();
   let items = [];
   let activeIndex = -1;
 
@@ -30,9 +31,9 @@ export function initAddressSearch({ input, results, onSelect, onCancel }) {
 
   function close() {
     clearTimeout(debounceTimer);
-    // Invalide aussi une recherche déjà en vol : sa réponse ne doit pas
+    // Annule aussi une recherche déjà en vol : sa réponse ne doit pas
     // rouvrir la liste après coup.
-    requestSeq++;
+    request.cancel();
     items = [];
     activeIndex = -1;
     results.replaceChildren();
@@ -86,17 +87,15 @@ export function initAddressSearch({ input, results, onSelect, onCancel }) {
     }
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
-      const seq = ++requestSeq;
-      let found;
+      let result;
       try {
-        found = await searchAddress(query);
+        result = await request.run((signal) => searchAddress(query, { signal }));
       } catch (err) {
-        if (seq !== requestSeq) return; // une frappe plus récente a déjà lancé une recherche plus fraîche
         showRouteError(err.message);
         return;
       }
-      if (seq !== requestSeq) return;
-      render(found);
+      // Une frappe plus récente a déjà lancé (et annulé celle-ci) une recherche plus fraîche.
+      if (!result.stale) render(result.value);
     }, DEBOUNCE_MS);
   });
 

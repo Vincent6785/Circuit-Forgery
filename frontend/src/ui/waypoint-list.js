@@ -7,6 +7,8 @@ import { roleForIndex } from "../map/waypoint-role.js";
 // fermer l'édition ne doit pas déclencher de recalcul.
 let _editingId = null;
 let _lastArgs = null;
+// Point dont l'édition vient d'être ouverte : son champ nom reçoit le focus.
+let _focusEditOf = null;
 
 // Type de données propre au glisser-déposer de la liste : un texte déposé
 // depuis l'extérieur (text/plain) ne doit pas être interprété comme un index.
@@ -72,9 +74,16 @@ function _renderList(waypoints, waypointManager, computedRoute) {
     li.appendChild(dot);
 
     if (_editingId === wp.id) {
-      li.appendChild(_editForm(wp, waypointManager));
+      const form = _editForm(wp, waypointManager);
+      li.appendChild(form);
+      if (_focusEditOf === wp.id) {
+        _focusEditOf = null;
+        queueMicrotask(() => form.querySelector("input")?.focus());
+      }
     } else {
-      const text = document.createElement("span");
+      // Un vrai bouton, atteignable au clavier (un <span> cliquable ne l'était pas).
+      const text = document.createElement("button");
+      text.type = "button";
       text.className = "waypoint-label";
       const legDistance = _legDistanceM(idx, computedRoute);
       const distanceSuffix = legDistance != null ? ` (+${(legDistance / 1000).toFixed(1)} km)` : "";
@@ -82,6 +91,7 @@ function _renderList(waypoints, waypointManager, computedRoute) {
       text.title = "Cliquer pour modifier le nom et les coordonnées";
       text.addEventListener("click", () => {
         _editingId = wp.id;
+        _focusEditOf = wp.id;
         _rerender();
       });
       li.appendChild(text);
@@ -91,6 +101,7 @@ function _renderList(waypoints, waypointManager, computedRoute) {
     // ne fonctionne ni au tactile ni au clavier (pas d'événement
     // dragstart/dragover sur mobile).
     const upBtn = document.createElement("button");
+    upBtn.type = "button";
     upBtn.textContent = "▲";
     upBtn.title = "Déplacer vers le haut";
     upBtn.setAttribute("aria-label", `Déplacer "${displayLabel}" vers le haut`);
@@ -102,6 +113,7 @@ function _renderList(waypoints, waypointManager, computedRoute) {
     li.appendChild(upBtn);
 
     const downBtn = document.createElement("button");
+    downBtn.type = "button";
     downBtn.textContent = "▼";
     downBtn.title = "Déplacer vers le bas";
     downBtn.setAttribute("aria-label", `Déplacer "${displayLabel}" vers le bas`);
@@ -113,6 +125,7 @@ function _renderList(waypoints, waypointManager, computedRoute) {
     li.appendChild(downBtn);
 
     const delBtn = document.createElement("button");
+    delBtn.type = "button";
     delBtn.textContent = "✕";
     delBtn.title = "Supprimer ce point";
     delBtn.setAttribute("aria-label", `Supprimer "${displayLabel}"`);

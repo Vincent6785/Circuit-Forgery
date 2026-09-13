@@ -1,27 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, mapPointAt, openRouteOptions } from "./helpers.js";
-
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
-  await page.waitForTimeout(300);
-}
-
-async function dragZone(page, centerLat, centerLon, edgeLat, edgeLon) {
-  const [centerPoint, edgePoint] = await page.evaluate(
-    ([c, e]) => [window.__map.latLngToContainerPoint(c), window.__map.latLngToContainerPoint(e)],
-    [
-      [centerLat, centerLon],
-      [edgeLat, edgeLon],
-    ]
-  );
-  const box = await page.locator("#map").boundingBox();
-  await page.mouse.move(box.x + centerPoint.x, box.y + centerPoint.y);
-  await page.mouse.down();
-  await page.mouse.move(box.x + edgePoint.x, box.y + edgePoint.y, { steps: 5 });
-  await page.mouse.up();
-}
+import { clickMapAt, dragZone, mapPointAt, openRouteOptions, setupParisView } from "./helpers.js";
 
 test("bouton alternatives absent pour un trajet à plus de 2 points", async ({ page }) => {
   await setupParisView(page);

@@ -16,6 +16,10 @@ COPY frontend/package.json frontend/package-lock.json ./
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
+# Accès internes pour les tests Playwright (window.__map…) : désactivés par
+# défaut, activés seulement par docker-compose.e2e.yml.
+ARG VITE_E2E_HOOKS=false
+ENV VITE_E2E_HOOKS=${VITE_E2E_HOOKS}
 RUN npm run build
 
 # --- Stage 2: backend Python servant l'API et le frontend buildé ---

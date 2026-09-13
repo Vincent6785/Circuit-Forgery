@@ -48,6 +48,12 @@ class Settings(BaseSettings):
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
+    # Fond de carte affiché par le frontend (exposé via /api/config) et
+    # autorisé en conséquence par la Content-Security-Policy. Sans sous-domaine
+    # {s}, déconseillé par la politique d'usage des tuiles OpenStreetMap.
+    tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    tile_attribution: str = "&copy; OpenStreetMap contributors"
+
     @model_validator(mode="after")
     def _check_bounding_box(self) -> "Settings":
         # Une inversion (ex. CF_MIN_LAT > CF_MAX_LAT par faute de frappe) fait

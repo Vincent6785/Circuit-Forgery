@@ -1,7 +1,8 @@
 import { deleteRoute, listRouteSummaries, updateRoute } from "../api/saved-routes.js";
 import { exportGpxUrl } from "../api/gpx.js";
 import { showRouteError } from "./sidebar.js";
-import { renderListPanel } from "./list-panel.js";
+import { listItemButton, renderListPanel } from "./list-panel.js";
+import { withInlineConfirmation } from "./confirm-button.js";
 
 /** Les éléments listés sont des résumés (sans points ni géométrie) : les
  * gestionnaires chargent eux-mêmes le détail du trajet ouvert.
@@ -10,7 +11,7 @@ import { renderListPanel } from "./list-panel.js";
  * est appelé après une suppression réussie, pour que l'éditeur sorte du mode
  * modification si c'est le trajet en cours qui vient d'être supprimé. */
 export function refreshSavedRoutesList(handlers) {
-  return renderListPanel("saved-routes-list", _listRoutesFavoritesFirst, {
+  return renderListPanel("saved-routes-list", (signal) => _listRoutesFavoritesFirst(signal), {
     renderLabel: (route) => _label(route, handlers.onSelect),
     renderActions: (route) => [
       _editButton(route, handlers.onEdit),
@@ -25,22 +26,21 @@ export function refreshSavedRoutesList(handlers) {
 /** Les favoris remontent en tête de liste. Tri stable (garanti par le moteur
  * JS) : l'ordre created_at DESC déjà renvoyé par l'API est préservé au sein
  * de chaque groupe favori/non-favori, sans avoir à le recalculer ici. */
-async function _listRoutesFavoritesFirst() {
-  const routes = await listRouteSummaries();
+async function _listRoutesFavoritesFirst(signal) {
+  const routes = await listRouteSummaries({ signal });
   return [...routes].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite));
 }
 
 function _label(route, onSelect) {
-  const label = document.createElement("span");
-  label.className = "list-item-label";
-  label.textContent = `${route.is_favorite ? "★ " : ""}${route.name} (${(route.distance_m / 1000).toFixed(1)} km)`;
-  if (route.description) label.title = route.description;
-  label.addEventListener("click", () => onSelect(route));
-  return label;
+  return listItemButton(`${route.is_favorite ? "★ " : ""}${route.name} (${(route.distance_m / 1000).toFixed(1)} km)`, {
+    title: route.description || undefined,
+    onClick: () => onSelect(route),
+  });
 }
 
 function _editButton(route, onEdit) {
   const editBtn = document.createElement("button");
+  editBtn.type = "button";
   editBtn.textContent = "✎";
   editBtn.title = "Modifier ce trajet";
   editBtn.setAttribute("aria-label", `Modifier le trajet "${route.name}"`);
@@ -53,6 +53,7 @@ function _editButton(route, onEdit) {
 
 function _duplicateButton(route, onDuplicate) {
   const dupBtn = document.createElement("button");
+  dupBtn.type = "button";
   dupBtn.textContent = "⎘";
   dupBtn.title = "Dupliquer ce trajet";
   dupBtn.setAttribute("aria-label", `Dupliquer le trajet "${route.name}"`);
@@ -76,6 +77,7 @@ function _exportLink(route) {
 
 function _favoriteButton(route, handlers) {
   const favBtn = document.createElement("button");
+  favBtn.type = "button";
   favBtn.textContent = route.is_favorite ? "☆" : "★";
   favBtn.title = "Basculer favori";
   favBtn.setAttribute(
@@ -100,21 +102,25 @@ function _favoriteButton(route, handlers) {
 
 function _deleteButton(route, handlers) {
   const delBtn = document.createElement("button");
+  delBtn.type = "button";
+  delBtn.dataset.action = "delete";
   delBtn.textContent = "✕";
   delBtn.title = "Supprimer";
   delBtn.setAttribute("aria-label", `Supprimer le trajet "${route.name}"`);
-  delBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    if (!confirm(`Supprimer définitivement le trajet "${route.name}" ?`)) return;
-    delBtn.disabled = true;
-    try {
-      await deleteRoute(route.id);
-      handlers.onDeleted?.(route);
-      refreshSavedRoutesList(handlers);
-    } catch (err) {
-      delBtn.disabled = false;
-      showRouteError(err.message);
-    }
+  withInlineConfirmation(delBtn, {
+    confirmLabel: "Supprimer ?",
+    confirmAriaLabel: `Confirmer la suppression définitive du trajet "${route.name}"`,
+    onConfirm: async () => {
+      delBtn.disabled = true;
+      try {
+        await deleteRoute(route.id);
+        handlers.onDeleted?.(route);
+        refreshSavedRoutesList(handlers);
+      } catch (err) {
+        delBtn.disabled = false;
+        showRouteError(err.message);
+      }
+    },
   });
   return delBtn;
 }

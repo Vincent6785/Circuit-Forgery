@@ -8,8 +8,9 @@ from fastapi.staticfiles import StaticFiles
 from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import settings
 from app.core.errors import install_exception_handlers
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import init_db
-from app.routers import geocode, gpx, health, poi, routes
+from app.routers import client_config, geocode, gpx, health, poi, routes
 from app.services.geocoding_client import geocoding_client
 from app.services.graphhopper_client import graphhopper_client
 
@@ -35,6 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Circuit Forgery", lifespan=lifespan)
 install_exception_handlers(app)
 
+app.add_middleware(SecurityHeadersMiddleware, tile_url=settings.tile_url)
 app.add_middleware(
     BodySizeLimitMiddleware,
     default_limit=settings.max_request_body_bytes,
@@ -46,6 +48,7 @@ app.include_router(routes.router)
 app.include_router(poi.router)
 app.include_router(geocode.router)
 app.include_router(gpx.router)
+app.include_router(client_config.router)
 
 _frontend_dist = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(_frontend_dist):
