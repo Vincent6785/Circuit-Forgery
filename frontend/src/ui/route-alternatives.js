@@ -24,7 +24,7 @@ const SPEED_LIMIT_TITLE =
  * alternatives sont donc impossibles sous cette contrainte, mieux vaut
  * l'expliquer que le cacher. "Aucune limite" reste compatible : c'est un
  * simple changement de profil, pas un custom_model par requête. */
-export function initRouteAlternatives({ store, routeLayer }) {
+export function initRouteAlternatives({ store, routeLayer, trackBusy = (promise) => promise }) {
   const btn = document.getElementById("show-alternatives-btn");
   const list = document.getElementById("alternatives-list");
 
@@ -71,11 +71,13 @@ export function initRouteAlternatives({ store, routeLayer }) {
     if (waypoints.length !== 2) return;
     btn.disabled = true;
     try {
-      const outcome = await request.run((signal) =>
-        computeAlternatives(
-          waypoints.map((p) => ({ lat: p.lat, lon: p.lon })),
-          noSpeedLimit,
-          { signal }
+      const outcome = await trackBusy(
+        request.run((signal) =>
+          computeAlternatives(
+            waypoints.map((p) => ({ lat: p.lat, lon: p.lon })),
+            noSpeedLimit,
+            { signal }
+          )
         )
       );
       if (outcome.stale) return;

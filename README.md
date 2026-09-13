@@ -34,6 +34,10 @@ d'attribution — distincte de la licence du code.
 
 ### Construire un trajet
 
+- **Tactile et mobile** : glisser le tracé et dessiner une zone à éviter
+  fonctionnent au doigt comme à la souris ; sur petit écran, le panneau se
+  replie ("Agrandir la carte") pour laisser toute la hauteur à la carte. Un
+  indicateur signale les calculs en cours.
 - **Interface en onglets** : *Itinéraire* (trajet A → B et ses étapes),
   *Boucle* (circuit généré) et *Mes trajets* (trajets sauvegardés, points
   d'intérêt). Les options (limite de vitesse, zones à éviter, repliées
@@ -49,7 +53,8 @@ d'attribution — distincte de la licence du code.
   automatiquement à chaque changement.
 - **Édition des waypoints** : marqueurs A, B et étapes numérotées,
   déplaçables par glisser-déposer ; suppression par clic droit sur un
-  marqueur (ou sélection + touche Suppr) ; insertion d'une étape en glissant
+  marqueur — appui long au doigt — (ou sélection + touche Suppr) ; insertion
+  d'une étape en glissant
   le tracé (une poignée apparaît au survol, avec la vitesse du tronçon).
   Liste réordonnable dans la sidebar (glisser-déposer ou boutons ▲▼,
   utilisables au clavier/tactile), avec suppression d'un point précis.
@@ -106,7 +111,8 @@ d'attribution — distincte de la licence du code.
 
 ### Sauvegarde et partage
 
-- **Sauvegarde / édition** : un trajet calculé peut être nommé, annoté
+- **Sauvegarde / édition** : un trajet calculé peut être nommé (puis
+  renommé en mode modification), annoté
   (champ description libre) et sauvegardé ; un trajet déjà sauvegardé se
   rouvre en édition ("Modifier" → mutation → "Enregistrer les
   modifications", distinct d'une nouvelle création) ou se **duplique**
@@ -115,7 +121,9 @@ d'attribution — distincte de la licence du code.
 - **Brouillon persistant** : le trajet en cours de construction est
   automatiquement sauvegardé en local (`localStorage`) et restauré si la
   page est rechargée par accident.
-- **Import / export GPX** : export d'un trajet sauvegardé au format GPX,
+- **Import / export GPX** : export au format GPX d'un trajet sauvegardé
+  (depuis la liste) ou du trajet affiché, même non sauvegardé (bouton
+  "Exporter en GPX", le nom saisi sert de nom de fichier) ;
   import d'un fichier GPX externe — les waypoints sont **extraits puis
   recalculés** par le moteur de routage (pas de rejeu tel quel), pour que
   le filtre anti-80 km/h s'applique toujours, même à un trajet importé.

@@ -5,7 +5,7 @@ import { indexForNewPoint } from "../utils/itinerary.js";
 import { normalizeIds } from "../utils/waypoint-ids.js";
 
 const PIN_SIZE = 26;
-const MARKER_HINT = "glisser pour déplacer · clic droit pour supprimer";
+const MARKER_HINT = "glisser pour déplacer · clic droit ou appui long pour supprimer";
 
 /** Épingle ronde avec badge ("A", "B" ou numéro d'étape). color et badge
  * viennent de roleForIndex (constantes et position dans le trajet), jamais

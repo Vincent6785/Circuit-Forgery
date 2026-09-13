@@ -21,6 +21,8 @@ import { initRoundTripController } from "./controllers/round-trip-controller.js"
 import { initAvoidZoneController } from "./controllers/avoid-zone-controller.js";
 import { initSpeedLimitController } from "./controllers/speed-limit-controller.js";
 import { initRouteAlternatives } from "./ui/route-alternatives.js";
+import { initBusyIndicator } from "./ui/busy-indicator.js";
+import { initSidebarToggle } from "./ui/sidebar-toggle.js";
 import { indexForRouteDrop } from "./utils/itinerary.js";
 
 initTabs();
@@ -75,19 +77,24 @@ const draftAutosave = initDraftAutosave(store);
 // l'autosave) serait sinon perdue.
 window.addEventListener("pagehide", () => draftAutosave.flush());
 
+// Indicateur "Calcul en cours…" partagé par toutes les opérations attendues.
+const trackBusy = initBusyIndicator();
+
 const { recomputeAndRender, waitForRecompute } = initRouteController({
   store,
   waypointManager,
   routeLayer,
   draftAutosave,
+  trackBusy,
 });
 initItineraryController({ map, store, waypointManager });
-initGpxController({ store, waypointManager, waitForRecompute });
-initRoundTripController({ map, store, waypointManager, waitForRecompute });
+initGpxController({ store, waypointManager, waitForRecompute, trackBusy });
+initRoundTripController({ map, store, waypointManager, waitForRecompute, trackBusy });
 initAvoidZoneController({ map, store, waypointManager, history });
 initSpeedLimitController({ store });
 initRouteOptionsSummary(store);
-initRouteAlternatives({ store, routeLayer });
+initRouteAlternatives({ store, routeLayer, trackBusy });
+initSidebarToggle({ map });
 
 const poiLayer = new POILayer(map);
 

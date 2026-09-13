@@ -71,3 +71,40 @@ def test_import_gpx_keeps_destination_and_leaves_headroom_when_truncating(client
     assert len(data["waypoints"]) <= settings.max_waypoints - 1
     assert data["waypoints"][0]["label"] == "Départ"
     assert data["waypoints"][-1]["label"] == "Arrivée"
+
+
+def _export_payload(**overrides):
+    payload = {
+        "name": "Balade du dimanche",
+        "waypoints": [{"lat": 45.41, "lon": 7.03, "label": "Départ <A>"}, {"lat": 45.26, "lon": 7.02}],
+        "geometry_geojson": {"type": "LineString", "coordinates": [[7.03, 45.41], [7.025, 45.33], [7.02, 45.26]]},
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_export_current_route_returns_gpx_file(client):
+    resp = client.post("/api/gpx/export", json=_export_payload())
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/gpx+xml")
+    assert "Balade%20du%20dimanche.gpx" in resp.headers["content-disposition"]
+    assert resp.text.count("<rtept") == 2
+    assert resp.text.count("<trkpt") == 3
+    # Libellés échappés : un nom de point ne peut pas injecter de balise.
+    assert "Départ &lt;A&gt;" in resp.text
+    assert "<A>" not in resp.text
+
+
+def test_export_current_route_defaults_name_when_absent(client):
+    resp = client.post("/api/gpx/export", json=_export_payload(name=None))
+    assert resp.status_code == 200
+    assert 'filename="trajet.gpx"' in resp.headers["content-disposition"]
+
+
+def test_export_current_route_rejects_invalid_input(client):
+    single_point = {"type": "LineString", "coordinates": [[7.03, 45.41]]}
+    assert client.post("/api/gpx/export", json=_export_payload(geometry_geojson=single_point)).status_code == 422
+    assert client.post("/api/gpx/export", json=_export_payload(waypoints=[{"lat": 45.41, "lon": 7.03}])).status_code == 422
+    assert client.post("/api/gpx/export", json=_export_payload(name="   ")).status_code == 422
+    outside_france = [{"lat": 40.71, "lon": -74.0}, {"lat": 45.26, "lon": 7.02}]
+    assert client.post("/api/gpx/export", json=_export_payload(waypoints=outside_france)).status_code == 400

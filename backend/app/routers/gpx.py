@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.models import Route
 from app.db.session import get_db
-from app.schemas.route import GpxImportResponse, WaypointOut
+from app.schemas.route import GpxExportRequest, GpxImportResponse, WaypointOut
 from app.services.gpx import build_gpx, parse_gpx
 from app.services.waypoint_validation import validate_waypoints
 
@@ -38,6 +38,20 @@ def export_gpx(route_id: int, db: Session = Depends(get_db)):
         content=gpx_xml,
         media_type="application/gpx+xml",
         headers={"Content-Disposition": _content_disposition(route.name)},
+    )
+
+
+@router.post("/gpx/export")
+def export_current_route_gpx(body: GpxExportRequest):
+    """GPX du trajet affiché, sans avoir à le sauvegarder d'abord : même
+    format que l'export d'un trajet sauvegardé."""
+    validate_waypoints(body.waypoints)
+    name = body.name or "trajet"
+    gpx_xml = build_gpx(name, body.waypoints, body.geometry_geojson.model_dump())
+    return Response(
+        content=gpx_xml,
+        media_type="application/gpx+xml",
+        headers={"Content-Disposition": _content_disposition(name)},
     )
 
 
