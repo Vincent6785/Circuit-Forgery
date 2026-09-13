@@ -1,7 +1,13 @@
 import { apiFetch } from "./http.js";
 
-export function listRoutes() {
-  return apiFetch("/api/routes");
+/** Liste allégée (sans points ni géométrie) : le détail d'un trajet n'est
+ * chargé qu'à son ouverture, via getRoute. */
+export function listRouteSummaries() {
+  return apiFetch("/api/routes?view=summary");
+}
+
+export function getRoute(id) {
+  return apiFetch(`/api/routes/${id}`);
 }
 
 export function createRoute(route) {

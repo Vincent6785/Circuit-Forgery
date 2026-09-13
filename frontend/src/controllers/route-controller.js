@@ -1,10 +1,11 @@
-import { createRoute, updateRoute } from "../api/saved-routes.js";
+import { createRoute, getRoute, updateRoute } from "../api/saved-routes.js";
 import { computeRoute, toApiAvoidZones, fromApiAvoidZones } from "../api/routing.js";
 import { showRouteInfo, hideRouteInfo, showRouteError, hideRouteError, showBanner } from "../ui/sidebar.js";
 import { refreshSavedRoutesList } from "../ui/saved-routes-list.js";
 import { renderWaypointList } from "../ui/waypoint-list.js";
 import { clearDraft } from "../state/draft-storage.js";
 import { switchTab } from "../ui/tabs.js";
+import { isSameRoute } from "../utils/route-match.js";
 
 /**
  * Câble la sidebar "Trajet" : calcul et rendu du tracé courant, sauvegarde,
@@ -17,6 +18,10 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
   // autorisé à mettre à jour le DOM à sa résolution.
   let recomputeSeq = 0;
   let currentComputation = Promise.resolve();
+  // Même principe pour l'ouverture d'un trajet sauvegardé (chargement du
+  // détail puis recalcul d'enrichissement) : seule la dernière ouverture
+  // demandée s'applique, et toute remise à zéro annule celles en cours.
+  let loadSeq = 0;
 
   function recomputeAndRender(waypoints) {
     currentComputation = computeAndRender(waypoints, ++recomputeSeq);
@@ -111,6 +116,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
    * "Annuler" (édition) — corps strictement identique, dont un champ oublié
    * ici resterait invisible dans l'autre sans ce partage. */
   function resetRouteState() {
+    loadSeq++;
     waypointManager.clear();
     store.setState(
       {
@@ -253,18 +259,58 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     );
   }
 
-  function loadSavedRoute(route) {
-    applyLoadedRoute(route, { editingRouteId: null });
+  /** Ouvre un trajet de la liste : la liste ne contient que des résumés, le
+   * détail (points, géométrie, options) est chargé ici. */
+  async function openSavedRoute(summary, optionsFor) {
+    const seq = ++loadSeq;
+    let route;
+    try {
+      route = await getRoute(summary.id);
+    } catch (err) {
+      if (seq === loadSeq) showRouteError(err.message);
+      return;
+    }
+    if (seq !== loadSeq) return;
+    applyLoadedRoute(route, optionsFor(route));
+    enrichLoadedRoute(route, seq);
   }
 
-  function enterEditMode(route) {
-    applyLoadedRoute(route, { editingRouteId: route.id });
+  /** Un trajet sauvegardé ne conserve que sa géométrie : sans recalcul, il
+   * s'affichait sans couleurs de vitesse, sans distances par étape, et
+   * glisser son tracé n'insérait pas l'étape au bon endroit. Le tracé
+   * enregistré reste affiché immédiatement ; le recalcul ne le remplace que
+   * s'il décrit bien le même trajet, et son échec (moteur indisponible)
+   * passe inaperçu. */
+  async function enrichLoadedRoute(route, seq) {
+    const { waypoints, avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
+    if (waypoints.length < 2) return;
+    let result;
+    try {
+      result = await computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit);
+    } catch {
+      return;
+    }
+    // Un autre trajet a été ouvert, ou les points modifiés entre-temps (ce
+    // qui déclenche déjà son propre calcul).
+    if (seq !== loadSeq || store.getState().waypoints !== waypoints) return;
+    if (!isSameRoute(route.distance_m, result.distance_m)) return;
+    routeLayer.draw(result.geometry_geojson, result.max_speed_by_segment, result.leg_boundaries);
+    showRouteInfo(result.distance_m, result.duration_s);
+    store.setState({ computedRoute: result }, { silent: true });
+  }
+
+  function loadSavedRoute(summary) {
+    return openSavedRoute(summary, () => ({ editingRouteId: null }));
+  }
+
+  function enterEditMode(summary) {
+    return openSavedRoute(summary, (route) => ({ editingRouteId: route.id }));
   }
 
   /** Identique à loadSavedRoute, mais avec editingRouteId: null : "Sauvegarder"
    * crée alors une nouvelle entrée plutôt que de modifier l'original. */
-  function duplicateRoute(route) {
-    applyLoadedRoute(route, { editingRouteId: null, prefillName: true });
+  function duplicateRoute(summary) {
+    return openSavedRoute(summary, () => ({ editingRouteId: null, prefillName: true }));
   }
 
   const savedRoutesHandlers = {

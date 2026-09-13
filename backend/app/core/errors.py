@@ -1,8 +1,11 @@
 import math
 
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
+from app.services.errors import InvalidInputError
+from app.services.graphhopper_client import GraphHopperRouteNotFoundError, GraphHopperUnavailableError
 
 # Champs conservés d'une erreur de validation Pydantic. "input" (la valeur
 # refusée) est volontairement omis : il peut s'agir d'une géométrie de
@@ -35,3 +38,23 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         for error in exc.errors()
     ]
     return JSONResponse(status_code=422, content={"detail": errors})
+
+
+def _detail_handler(status_code: int):
+    async def handler(request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(status_code=status_code, content={"detail": str(exc)})
+
+    return handler
+
+
+def install_exception_handlers(app: FastAPI) -> None:
+    """Traduit les erreurs du domaine en réponses HTTP en un seul endroit,
+    plutôt que dans chaque route :
+    - InvalidInputError (règle métier) → 400 ;
+    - GraphHopperRouteNotFoundError (itinéraire impossible) → 422 ;
+    - GraphHopperUnavailableError (moteur indisponible) → 503, avec un
+      message générique (le détail est journalisé par le client)."""
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(InvalidInputError, _detail_handler(400))
+    app.add_exception_handler(GraphHopperRouteNotFoundError, _detail_handler(422))
+    app.add_exception_handler(GraphHopperUnavailableError, _detail_handler(503))

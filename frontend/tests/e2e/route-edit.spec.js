@@ -125,3 +125,39 @@ test("supprimer le trajet en cours de modification quitte le mode modification",
     await request.delete(`/api/routes/${route.id}`);
   }
 });
+
+test("rouvrir un trajet sauvegardé affiche son tracé même si le recalcul échoue", async ({ page, request }) => {
+  const name = ROUTE_NAME + " Hors ligne";
+  await page.goto("/");
+  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
+  await clickMapAt(page, POINT_A.lat, POINT_A.lon);
+  await clickMapAt(page, POINT_B.lat, POINT_B.lon);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
+
+  // La liste affichée est la version allégée (sans géométrie).
+  const summaryRequest = page.waitForRequest((r) => r.url().includes("/api/routes?view=summary"));
+  await page.fill("#save-route-name-input", name);
+  await page.locator("#save-route-btn").click();
+  await summaryRequest;
+  const saved = (await request.get("/api/routes").then((r) => r.json())).find((r) => r.name === name);
+
+  await page.route("**/api/routes/compute", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Le moteur de routage est indisponible pour le moment." }),
+    })
+  );
+  await openTab(page, "saved");
+  const computeFailed = page.waitForResponse((r) => r.url().includes("/api/routes/compute"));
+  await page.locator("#saved-routes-list li", { hasText: name }).locator(".list-item-label").click();
+  await computeFailed;
+  await page.waitForTimeout(300);
+
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#route-distance")).toHaveText(`${(saved.distance_m / 1000).toFixed(1)} km`);
+  await expect(page.locator("#route-error")).toHaveClass(/hidden/);
+  await expect(page.locator("#waypoint-list li")).toHaveCount(2);
+
+  await request.delete(`/api/routes/${saved.id}`);
+});

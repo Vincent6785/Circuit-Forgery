@@ -6,8 +6,15 @@ import httpx
 from app.core.config import settings
 from app.schemas.route import AvoidZone
 from app.services.avoid_zone import build_custom_model
+from app.services.http import SharedAsyncClient
 
 logger = logging.getLogger(__name__)
+
+# Connexion courte (GraphHopper est sur le réseau Docker local), lecture
+# longue : un calcul avec custom_model sur un long trajet peut prendre
+# plusieurs secondes.
+_ROUTING_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+_HEALTH_TIMEOUT = httpx.Timeout(3.0)
 
 
 class GraphHopperUnavailableError(RuntimeError):
@@ -107,25 +114,21 @@ def _extract_paths(resp: httpx.Response) -> list[dict]:
 class GraphHopperClient:
     def __init__(self, base_url: str = settings.graphhopper_url):
         self._base_url = base_url.rstrip("/")
+        self._http = SharedAsyncClient(timeout=_ROUTING_TIMEOUT)
+
+    async def aclose(self) -> None:
+        await self._http.aclose()
 
     async def health(self) -> bool:
+        # Endpoint de santé natif de GraphHopper : répond sans calculer
+        # d'itinéraire, contrairement à l'ancienne sonde (une vraie requête
+        # de routage, exécutée à chaque vérification).
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                # Pas de /health dédié exposé ici : une requête de routage
-                # triviale entre deux points proches fait office de sonde de
-                # disponibilité.
-                resp = await client.get(
-                    f"{self._base_url}/route",
-                    params={
-                        "point": ["48.8566,2.3522", "48.8600,2.3500"],
-                        "profile": settings.graphhopper_profile,
-                        "points_encoded": "false",
-                        "ch.disable": "true",
-                    },
-                )
-                return resp.status_code == 200
-        except httpx.HTTPError:
+            resp = await self._http.client.get(f"{self._base_url}/health", timeout=_HEALTH_TIMEOUT)
+        except httpx.HTTPError as exc:
+            logger.warning("Sonde de santé GraphHopper en échec : %r", exc)
             return False
+        return resp.status_code == 200
 
     async def route(
         self,
@@ -140,42 +143,42 @@ class GraphHopperClient:
 
         profile_name = _resolve_profile(profile, no_speed_limit)
         tightened_speed_limit = _tightened_speed_limit(speed_limit_kmh, no_speed_limit)
+        client = self._http.client
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            try:
-                if avoid_zones or tightened_speed_limit is not None:
-                    # Zones à éviter et/ou seuil resserré : nécessitent un corps
-                    # JSON (custom_model), donc POST plutôt que le GET utilisé
-                    # pour le cas courant. Vérifié empiriquement que ce
-                    # custom_model se fusionne côté GraphHopper avec celui du
-                    # profil plutôt que de le remplacer — le filtre du profil
-                    # reste actif en plus de ces règles supplémentaires.
-                    body = {
-                        "points": [[lon, lat] for lat, lon in points],
-                        "profile": profile_name,
-                        "points_encoded": False,
-                        "ch.disable": True,
-                        "details": ["max_speed", "road_class"],
-                        "locale": "fr",
-                        "custom_model": build_custom_model(avoid_zones or [], tightened_speed_limit),
-                    }
-                    resp = await client.post(f"{self._base_url}/route", json=body)
-                else:
-                    params = {
-                        "point": [f"{lat},{lon}" for lat, lon in points],
-                        "profile": profile_name,
-                        "points_encoded": "false",
-                        # moto_no_fast/moto_no_limit n'ont pas de préparation CH —
-                        # figée à l'import pour un custom_model — donc CH doit
-                        # être désactivé pour que GraphHopper retombe sur sa
-                        # préparation LM.
-                        "ch.disable": "true",
-                        "details": ["max_speed", "road_class"],
-                        "locale": "fr",
-                    }
-                    resp = await client.get(f"{self._base_url}/route", params=params)
-            except httpx.HTTPError as exc:
-                raise _unreachable(exc) from exc
+        try:
+            if avoid_zones or tightened_speed_limit is not None:
+                # Zones à éviter et/ou seuil resserré : nécessitent un corps
+                # JSON (custom_model), donc POST plutôt que le GET utilisé
+                # pour le cas courant. Vérifié empiriquement que ce
+                # custom_model se fusionne côté GraphHopper avec celui du
+                # profil plutôt que de le remplacer — le filtre du profil
+                # reste actif en plus de ces règles supplémentaires.
+                body = {
+                    "points": [[lon, lat] for lat, lon in points],
+                    "profile": profile_name,
+                    "points_encoded": False,
+                    "ch.disable": True,
+                    "details": ["max_speed", "road_class"],
+                    "locale": "fr",
+                    "custom_model": build_custom_model(avoid_zones or [], tightened_speed_limit),
+                }
+                resp = await client.post(f"{self._base_url}/route", json=body)
+            else:
+                params = {
+                    "point": [f"{lat},{lon}" for lat, lon in points],
+                    "profile": profile_name,
+                    "points_encoded": "false",
+                    # moto_no_fast/moto_no_limit n'ont pas de préparation CH —
+                    # figée à l'import pour un custom_model — donc CH doit
+                    # être désactivé pour que GraphHopper retombe sur sa
+                    # préparation LM.
+                    "ch.disable": "true",
+                    "details": ["max_speed", "road_class"],
+                    "locale": "fr",
+                }
+                resp = await client.get(f"{self._base_url}/route", params=params)
+        except httpx.HTTPError as exc:
+            raise _unreachable(exc) from exc
 
         return _extract_paths(resp)[0]
 
@@ -195,8 +198,6 @@ class GraphHopperClient:
 
         base = {
             "profile": profile_name,
-            "points_encoded": False,
-            "ch.disable": True,
             "algorithm": "round_trip",
             "round_trip.distance": distance_m,
             "details": ["max_speed", "road_class"],
@@ -204,25 +205,27 @@ class GraphHopperClient:
         }
         if seed is not None:
             base["round_trip.seed"] = seed
+        client = self._http.client
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            try:
-                if avoid_zones or tightened_speed_limit is not None:
-                    # Comme route() : des zones à éviter et/ou un seuil resserré
-                    # nécessitent un custom_model, donc un corps JSON. Vérifié
-                    # empiriquement que round_trip (contrairement à
-                    # alternative_route) accepte bien un custom_model combiné.
-                    body = {
-                        **base,
-                        "points": [[lon, lat]],
-                        "custom_model": build_custom_model(avoid_zones or [], tightened_speed_limit),
-                    }
-                    resp = await client.post(f"{self._base_url}/route", json=body)
-                else:
-                    params = {**base, "point": f"{lat},{lon}", "points_encoded": "false", "ch.disable": "true"}
-                    resp = await client.get(f"{self._base_url}/route", params=params)
-            except httpx.HTTPError as exc:
-                raise _unreachable(exc) from exc
+        try:
+            if avoid_zones or tightened_speed_limit is not None:
+                # Comme route() : des zones à éviter et/ou un seuil resserré
+                # nécessitent un custom_model, donc un corps JSON. Vérifié
+                # empiriquement que round_trip (contrairement à
+                # alternative_route) accepte bien un custom_model combiné.
+                body = {
+                    **base,
+                    "points": [[lon, lat]],
+                    "points_encoded": False,
+                    "ch.disable": True,
+                    "custom_model": build_custom_model(avoid_zones or [], tightened_speed_limit),
+                }
+                resp = await client.post(f"{self._base_url}/route", json=body)
+            else:
+                params = {**base, "point": f"{lat},{lon}", "points_encoded": "false", "ch.disable": "true"}
+                resp = await client.get(f"{self._base_url}/route", params=params)
+        except httpx.HTTPError as exc:
+            raise _unreachable(exc) from exc
 
         return _extract_paths(resp)[0]
 
@@ -246,11 +249,10 @@ class GraphHopperClient:
             "locale": "fr",
         }
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            try:
-                resp = await client.get(f"{self._base_url}/route", params=params)
-            except httpx.HTTPError as exc:
-                raise _unreachable(exc) from exc
+        try:
+            resp = await self._http.client.get(f"{self._base_url}/route", params=params)
+        except httpx.HTTPError as exc:
+            raise _unreachable(exc) from exc
 
         return _extract_paths(resp)
 

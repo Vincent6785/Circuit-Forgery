@@ -46,11 +46,16 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
   await openTab(page, "saved");
   await expect(page.locator("#saved-routes-list li", { hasText: ROUTE_NAME })).toBeVisible();
 
-  // Cliquer le trajet sauvegardé ne doit PAS déclencher un nouvel appel de
-  // calcul : le tracé est réaffiché depuis le geometry_geojson mis en cache.
-  let computeCalled = false;
-  page.on("request", (req) => {
-    if (req.url().includes("/api/routes/compute")) computeCalled = true;
+  // Le trajet sauvegardé s'affiche aussitôt depuis sa géométrie enregistrée,
+  // sans attendre le recalcul lancé en arrière-plan pour retrouver les
+  // vitesses et les distances par étape (retenu ici jusqu'à la vérification).
+  let releaseCompute;
+  const computeGate = new Promise((resolve) => {
+    releaseCompute = resolve;
+  });
+  await page.route("**/api/routes/compute", async (route) => {
+    await computeGate;
+    await route.continue();
   });
   // Cible le libellé précisément (comme partout ailleurs dans la suite,
   // ex. route-edit.spec.js cible son bouton "✎") plutôt que le <li> entier :
@@ -62,7 +67,14 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
     .locator(".list-item-label")
     .click();
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
-  expect(computeCalled).toBe(false);
+  await expect(page.locator("#waypoint-list li")).toHaveCount(2);
+  await expect(page.locator("#waypoint-list li").nth(1).locator(".waypoint-label")).not.toContainText("km)");
+
+  const enriched = page.waitForResponse((r) => r.url().includes("/api/routes/compute"));
+  releaseCompute();
+  await enriched;
+  await expect(page.locator("#waypoint-list li").nth(1).locator(".waypoint-label")).toContainText("km)");
+  await page.unroute("**/api/routes/compute");
 
   // Nettoyage : supprime le trajet créé, pour ne pas polluer les runs suivants.
   const routes = await request.get("/api/routes").then((r) => r.json());

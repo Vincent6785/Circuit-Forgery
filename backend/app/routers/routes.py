@@ -1,7 +1,9 @@
 import json
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -16,19 +18,18 @@ from app.schemas.route import (
     ComputeRouteResponse,
     RouteCreate,
     RouteOut,
+    RouteSummaryOut,
     RoundTripRequest,
     RouteUpdate,
     WaypointOut,
 )
 from app.services.geo_sampling import subsample_indices
-from app.services.graphhopper_client import (
-    GraphHopperRouteNotFoundError,
-    GraphHopperUnavailableError,
-    graphhopper_client,
-)
+from app.services.graphhopper_client import graphhopper_client
 from app.services.route_enrichment import path_to_response
 from app.services.waypoint_validation import validate_avoid_zones, validate_waypoints
 
+# Les erreurs du domaine (règle métier, itinéraire impossible, moteur
+# indisponible) sont traduites en réponses HTTP par app/core/errors.py.
 router = APIRouter(prefix="/api/routes", tags=["routes"])
 
 
@@ -69,18 +70,12 @@ def _get_route_or_404(db: Session, route_id: int) -> Route:
 async def compute_route(body: ComputeRouteRequest):
     validate_waypoints(body.waypoints)
     validate_avoid_zones(body.avoid_zones)
-    points = [(wp.lat, wp.lon) for wp in body.waypoints]
-    try:
-        path = await graphhopper_client.route(
-            points,
-            avoid_zones=body.avoid_zones or None,
-            speed_limit_kmh=body.speed_limit_kmh,
-            no_speed_limit=body.no_speed_limit,
-        )
-    except GraphHopperRouteNotFoundError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    except GraphHopperUnavailableError as exc:
-        raise HTTPException(503, str(exc)) from exc
+    path = await graphhopper_client.route(
+        [(wp.lat, wp.lon) for wp in body.waypoints],
+        avoid_zones=body.avoid_zones or None,
+        speed_limit_kmh=body.speed_limit_kmh,
+        no_speed_limit=body.no_speed_limit,
+    )
     return path_to_response(path)
 
 
@@ -90,19 +85,14 @@ async def compute_round_trip(body: RoundTripRequest):
     validate_avoid_zones(body.avoid_zones)
     if body.distance_m > settings.max_round_trip_distance_m:
         raise HTTPException(400, f"Distance de circuit trop grande (max {settings.max_round_trip_distance_m} m)")
-    try:
-        path = await graphhopper_client.route_round_trip(
-            (body.start.lat, body.start.lon),
-            body.distance_m,
-            body.seed,
-            avoid_zones=body.avoid_zones or None,
-            speed_limit_kmh=body.speed_limit_kmh,
-            no_speed_limit=body.no_speed_limit,
-        )
-    except GraphHopperRouteNotFoundError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    except GraphHopperUnavailableError as exc:
-        raise HTTPException(503, str(exc)) from exc
+    path = await graphhopper_client.route_round_trip(
+        (body.start.lat, body.start.lon),
+        body.distance_m,
+        body.seed,
+        avoid_zones=body.avoid_zones or None,
+        speed_limit_kmh=body.speed_limit_kmh,
+        no_speed_limit=body.no_speed_limit,
+    )
     raw_coordinates = path["points"]["coordinates"]
     if len(raw_coordinates) < 2:
         raise HTTPException(422, "Aucun circuit trouvé depuis ce point")
@@ -126,19 +116,34 @@ async def compute_round_trip(body: RoundTripRequest):
 @router.post("/alternatives", response_model=AlternativesResponse)
 async def compute_alternatives(body: AlternativesRequest):
     validate_waypoints(body.waypoints)
-    points = [(wp.lat, wp.lon) for wp in body.waypoints]
-    try:
-        paths = await graphhopper_client.route_alternatives(points, no_speed_limit=body.no_speed_limit)
-    except GraphHopperRouteNotFoundError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    except GraphHopperUnavailableError as exc:
-        raise HTTPException(503, str(exc)) from exc
+    paths = await graphhopper_client.route_alternatives(
+        [(wp.lat, wp.lon) for wp in body.waypoints], no_speed_limit=body.no_speed_limit
+    )
     return AlternativesResponse(alternatives=[path_to_response(p) for p in paths])
 
 
-@router.get("", response_model=list[RouteOut])
-def list_routes(db: Session = Depends(get_db)):
-    routes = db.query(Route).order_by(Route.created_at.desc()).all()
+@router.get("", response_model=list[RouteOut] | list[RouteSummaryOut])
+def list_routes(view: Literal["full", "summary"] = "full", db: Session = Depends(get_db)):
+    """view=summary : liste allégée, sans points ni géométrie — seules les
+    colonnes affichées dans la liste sont lues, au lieu de désérialiser
+    jusqu'à plusieurs Mo de géométrie par trajet. Le détail complet s'obtient
+    via GET /api/routes/{id}. view=full (défaut) est conservé pour les clients
+    existants."""
+    if view == "summary":
+        rows = db.execute(
+            select(
+                Route.id,
+                Route.name,
+                Route.description,
+                Route.distance_m,
+                Route.duration_s,
+                Route.is_favorite,
+                Route.created_at,
+                Route.updated_at,
+            ).order_by(Route.created_at.desc())
+        ).all()
+        return [RouteSummaryOut.model_validate(dict(row._mapping)) for row in rows]
+    routes = db.scalars(select(Route).order_by(Route.created_at.desc())).all()
     return [_route_to_out(r) for r in routes]
 
 

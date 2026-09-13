@@ -435,3 +435,30 @@ def test_compute_route_maps_graphhopper_errors(client, monkeypatch):
 
 def test_get_missing_route_returns_404(client):
     assert client.get("/api/routes/999999").status_code == 404
+
+
+def test_list_routes_summary_view_omits_heavy_fields(client):
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    created = client.post("/api/routes", json=payload).json()
+
+    resp = client.get("/api/routes", params={"view": "summary"})
+    assert resp.status_code == 200
+    item = next(r for r in resp.json() if r["id"] == created["id"])
+    assert set(item) == {"id", "name", "description", "distance_m", "duration_s", "is_favorite", "created_at", "updated_at"}
+    assert item["created_at"].endswith("Z")
+
+
+def test_list_routes_full_view_remains_the_default(client):
+    payload = _route_payload([{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}])
+    client.post("/api/routes", json=payload)
+    assert "geometry_geojson" in client.get("/api/routes").json()[0]
+
+
+def test_list_routes_rejects_unknown_view(client):
+    assert client.get("/api/routes", params={"view": "tout"}).status_code == 422
+
+
+def test_business_rule_violation_is_mapped_to_400(client):
+    resp = client.post("/api/routes/compute", json={"waypoints": [{"lat": 60.0, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}]})
+    assert resp.status_code == 400
+    assert "Latitude hors de France" in resp.json()["detail"]

@@ -43,3 +43,15 @@ def test_additive_migrations_upgrade_old_routes_table(tmp_path, monkeypatch):
     with engine.connect() as conn:
         assert conn.execute(text("SELECT no_speed_limit FROM routes")).scalar_one() == 0
     engine.dispose()
+
+
+def test_create_sqlite_engine_enables_wal_and_busy_timeout(tmp_path):
+    from sqlalchemy import text
+
+    from app.db.session import create_sqlite_engine
+
+    engine = create_sqlite_engine(str(tmp_path / "wal.db"))
+    with engine.connect() as conn:
+        assert conn.execute(text("PRAGMA journal_mode")).scalar_one() == "wal"
+        assert conn.execute(text("PRAGMA busy_timeout")).scalar_one() == 5000
+    engine.dispose()

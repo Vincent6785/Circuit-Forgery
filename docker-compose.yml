@@ -46,12 +46,12 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      # Sonde de vivacité simple (le serveur HTTP répond) : /api/health renvoie
-      # toujours 200 même si graphhopper/la base sont en panne (son rôle est de
-      # renseigner l'état dans le corps de la réponse, pas de coder ça en HTTP
-      # status) — le séquencement réel du démarrage est déjà assuré par
-      # depends_on/condition ci-dessus sur le service graphhopper.
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      # Sonde de vivacité seule (/api/health/live, sans dépendance) : l'ancienne
+      # sonde /api/health lançait un vrai calcul d'itinéraire GraphHopper toutes
+      # les 30 s. L'état des dépendances reste consultable sur /api/health, et
+      # /api/health/ready répond 503 tant qu'elles ne sont pas disponibles ; le
+      # séquencement du démarrage est assuré par depends_on ci-dessus.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/live', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3

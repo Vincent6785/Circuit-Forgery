@@ -3,14 +3,15 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
 from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import settings
-from app.core.errors import validation_error_handler
+from app.core.errors import install_exception_handlers
 from app.db.session import init_db
 from app.routers import geocode, gpx, health, poi, routes
+from app.services.geocoding_client import geocoding_client
+from app.services.graphhopper_client import graphhopper_client
 
 # Sans configuration, les journaux de l'application (erreurs amont de
 # GraphHopper ou Nominatim, notamment) n'étaient écrits nulle part. Sans
@@ -26,10 +27,13 @@ _MULTIPART_OVERHEAD_BYTES = 64_000
 async def lifespan(app: FastAPI):
     init_db()
     yield
+    # Ferme les pools de connexions HTTP partagés (GraphHopper, Nominatim).
+    await graphhopper_client.aclose()
+    await geocoding_client.aclose()
 
 
 app = FastAPI(title="Circuit Forgery", lifespan=lifespan)
-app.add_exception_handler(RequestValidationError, validation_error_handler)
+install_exception_handlers(app)
 
 app.add_middleware(
     BodySizeLimitMiddleware,
