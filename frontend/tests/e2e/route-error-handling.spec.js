@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt } from "./helpers.js";
+import { clickMapAt, setupParisView } from "./helpers.js";
 
 const VALID_POINT = { lat: 48.8566, lon: 2.3522 }; // Paris
 // Coordonnées exactes en mer près du Cotentin qui ont réellement déclenché ce
@@ -45,4 +45,37 @@ test("point sans route à proximité : message inline, pas de popup navigateur",
 
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
   await expect(errorBanner).toHaveClass(/hidden/);
+});
+
+test("un calcul en échec retire l'ancien tracé : rien à sauvegarder ni à exporter", async ({ page }) => {
+  await setupParisView(page);
+  await clickMapAt(page, 48.8566, 2.3522);
+  await clickMapAt(page, 48.8738, 2.295);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#export-gpx-btn")).toBeEnabled();
+
+  await page.route("**/api/routes/compute", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Le moteur de routage est indisponible pour le moment." }),
+    })
+  );
+  await clickMapAt(page, 48.87, 2.36);
+
+  await expect(page.locator("#route-error")).toHaveClass(/error/);
+  await expect(page.locator("#route-error")).not.toHaveClass(/hidden/);
+  // Le tracé des deux premiers points ne doit plus passer pour celui des trois.
+  expect(await page.evaluate(() => window.__getComputedRoute())).toBeNull();
+  await expect(page.locator("#route-distance")).toHaveText("—");
+  await expect(page.locator("#save-route-btn")).toBeDisabled();
+  await expect(page.locator("#export-gpx-btn")).toBeDisabled();
+
+  // Le moteur revient : le calcul suivant réactive les actions.
+  await page.unroute("**/api/routes/compute");
+  await clickMapAt(page, 48.88, 2.34);
+  await expect(page.locator("#route-error")).toHaveClass(/hidden/);
+  await expect(page.locator("#save-route-btn")).toBeEnabled();
+  await expect(page.locator("#export-gpx-btn")).toBeEnabled();
+  expect(await page.evaluate(() => window.__getComputedRoute().leg_boundaries.length)).toBe(4);
 });

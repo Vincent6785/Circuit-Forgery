@@ -11,10 +11,13 @@ export function initSidebarToggle({ map }) {
     app.classList.toggle(COLLAPSED_CLASS, collapsed);
     button.setAttribute("aria-expanded", String(!collapsed));
     button.textContent = collapsed ? "Afficher le panneau" : "Agrandir la carte";
-    // La carte change de taille : Leaflet doit recalculer sa zone d'affichage,
-    // sans quoi des tuiles manquent et les clics tombent au mauvais endroit.
-    requestAnimationFrame(() => map.invalidateSize());
   }
+
+  // La carte change de taille — panneau replié ou déplié, mais aussi message
+  // d'erreur affiché sous le panneau replié : Leaflet doit recalculer sa zone
+  // d'affichage, sans quoi des tuiles manquent et les clics tombent au mauvais
+  // endroit.
+  new ResizeObserver(() => map.invalidateSize()).observe(map.getContainer());
 
   button.addEventListener("click", () => setCollapsed(!app.classList.contains(COLLAPSED_CLASS)));
   for (const tab of document.querySelectorAll('[role="tab"]')) {

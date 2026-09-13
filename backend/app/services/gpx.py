@@ -11,12 +11,14 @@ from app.services.geo_sampling import subsample
 GPX_NS = "http://www.topografix.com/GPX/1/1"
 
 
-# Caractères de contrôle illégaux en XML 1.0 (hors tabulation/saut de ligne/
-# retour chariot, valides eux) : rien ne les empêche d'atteindre un nom de
-# trajet ou un label de waypoint (seule la longueur est validée côté schéma),
-# et leur présence produirait un .gpx mal formé, rejeté par la plupart des
-# lecteurs XML — y compris le propre import de l'app (defusedxml).
-_XML_ILLEGAL_CONTROL_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f]")
+# Caractères illégaux en XML 1.0 : contrôles C0 (hors tabulation/saut de
+# ligne/retour chariot, valides eux) et non-caractères U+FFFE/U+FFFF (les
+# surrogates isolés sont déjà refusés par la validation JSON). Rien ne les
+# empêche d'atteindre un nom de trajet ou un label de waypoint (seule la
+# longueur est validée côté schéma), et leur présence produirait un .gpx mal
+# formé, rejeté par la plupart des lecteurs XML — y compris le propre import
+# de l'app (defusedxml).
+_XML_ILLEGAL_CONTROL_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
 
 
 def _escape(text: str) -> str:

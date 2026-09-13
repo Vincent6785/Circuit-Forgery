@@ -27,6 +27,8 @@ export class AvoidZoneDrawInteraction {
     this._getPresetRadiusM = getPresetRadiusM;
     this._active = false;
     this._ghost = null;
+    /** Termine sans zone le tracé en cours ; null hors tracé. */
+    this._cancelDrawing = null;
 
     map.getContainer().addEventListener("pointerdown", (e) => this._onPointerDown(e));
   }
@@ -41,6 +43,9 @@ export class AvoidZoneDrawInteraction {
     container.style.cursor = this._active ? "crosshair" : "";
     // Au doigt, glisser dessine alors la zone au lieu de déplacer ou zoomer la carte.
     container.style.touchAction = this._active ? "none" : "";
+    // Mode désactivé en plein glisser (changement d'onglet, options repliées) :
+    // le relâchement ajoutait sinon quand même la zone.
+    if (!this._active) this._cancelDrawing?.();
     return this._active;
   }
 
@@ -53,6 +58,10 @@ export class AvoidZoneDrawInteraction {
     if (e.target instanceof Element && e.target.closest(".leaflet-control")) return;
     e.preventDefault();
     e.stopPropagation();
+    // Un seul tracé à la fois : un second doigt posé pendant le glisser en
+    // démarrait un autre, dont le cercle fantôme restait sur la carte et qui
+    // ajoutait une seconde zone.
+    if (this._cancelDrawing) return;
     this._map.dragging.disable();
     const center = this._map.mouseEventToLatLng(e);
     const container = this._map.getContainer();
@@ -76,6 +85,7 @@ export class AvoidZoneDrawInteraction {
       document.removeEventListener("pointerup", onUp);
       document.removeEventListener("pointercancel", onCancel);
       document.removeEventListener("keydown", onKeyDown);
+      this._cancelDrawing = null;
       this._map.dragging.enable();
       this._ghost?.remove();
       this._ghost = null;
@@ -108,5 +118,6 @@ export class AvoidZoneDrawInteraction {
     document.addEventListener("pointerup", onUp);
     document.addEventListener("pointercancel", onCancel);
     document.addEventListener("keydown", onKeyDown);
+    this._cancelDrawing = () => finish(null);
   }
 }
