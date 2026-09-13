@@ -1,4 +1,5 @@
 import L from "leaflet";
+import { isEventInside } from "./dom-utils.js";
 
 const GHOST_STYLE = {
   radius: 6,
@@ -81,10 +82,7 @@ export class RouteInsertInteraction {
       window.addEventListener("click", swallowClick, { capture: true, once: true });
       setTimeout(() => window.removeEventListener("click", swallowClick, { capture: true }), 0);
 
-      const rect = container.getBoundingClientRect();
-      const inside =
-        ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom;
-      if (!inside) return;
+      if (!isEventInside(container, ev)) return;
       const { lat, lng } = this._map.mouseEventToLatLng(ev);
       this._onInsert(segmentIndex, this._legBoundaries, lat, lng);
     };
