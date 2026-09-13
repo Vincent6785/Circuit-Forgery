@@ -124,3 +124,35 @@ test("distance depuis l'étape précédente affichée pour les points suivants u
   const firstItem = page.locator("#waypoint-list li").first();
   await expect(firstItem.locator(".waypoint-label")).not.toContainText("km)");
 });
+
+test("l'édition d'un point en cours survit à la fin d'un calcul d'itinéraire", async ({ page }) => {
+  // Régression : la liste était reconstruite à chaque notification du store,
+  // effaçant la saisie en cours dès qu'un calcul se terminait.
+  await setupParisView(page);
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/routes/compute", async (route) => {
+    await gate;
+    await route.continue();
+  });
+
+  await clickMapAt(page, 48.8566, 2.3522);
+  await clickMapAt(page, 48.8738, 2.295);
+
+  const firstItem = page.locator("#waypoint-list li").first();
+  await firstItem.locator(".waypoint-label").click();
+  const nameInput = firstItem.locator('input[type="text"]');
+  await nameInput.fill("Saisie en cours");
+
+  const computed = page.waitForResponse((r) => r.url().includes("/api/routes/compute"));
+  release();
+  await computed;
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
+
+  await expect(nameInput).toHaveValue("Saisie en cours");
+  await expect(nameInput).toBeFocused();
+  await nameInput.press("Enter");
+  await expect(page.locator("#waypoint-list li").first().locator(".waypoint-label")).toContainText("Saisie en cours");
+});

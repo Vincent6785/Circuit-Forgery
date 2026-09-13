@@ -32,7 +32,7 @@ const FORCED_POINT_HINT = "Cliquez le point que le circuit devra traverser…";
  * que dans une variable locale, pour la même raison — sinon "Nouvelle
  * variante" resterait activé après un "Effacer les points"/chargement d'un
  * trajet et régénérerait un circuit sans rapport à la place. */
-export function initRoundTripController({ map, store, waypointManager, recomputeAndRender }) {
+export function initRoundTripController({ map, store, waypointManager, waitForRecompute }) {
   const distanceInput = document.getElementById("round-trip-distance-input");
   const generateBtn = document.getElementById("round-trip-generate-btn");
   const variantBtn = document.getElementById("round-trip-variant-btn");
@@ -46,6 +46,9 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   let pickingMode = null; // "start" | "forced-point" | null
   let pendingDistanceM = null; // distance saisie, en attente du clic qui fournira le point de départ
   let forcedPointMarker = null;
+  // Génération en cours : "Autre variante" reste désactivé jusqu'à la fin,
+  // sans quoi deux générations concurrentes pouvaient se chevaucher.
+  let generating = false;
 
   function stopPicking() {
     pickingMode = null;
@@ -84,12 +87,15 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   }
 
   store.subscribe((state) => renderForcedPoint(state.pendingForcedPoint));
-  store.subscribe((state) => {
-    variantBtn.disabled = !state.roundTripVariant;
-  });
+  function syncVariantButton() {
+    variantBtn.disabled = generating || !store.getState().roundTripVariant;
+  }
+  store.subscribe(syncVariantButton);
 
   async function generateFrom(lat, lon, distanceM, seed) {
+    generating = true;
     generateBtn.disabled = true;
+    syncVariantButton();
     try {
       const { avoidZones, speedLimitKmh, noSpeedLimit, pendingForcedPoint } = store.getState();
       const result = await computeRoundTrip({ lat, lon }, distanceM, seed, avoidZones, speedLimitKmh, noSpeedLimit);
@@ -112,12 +118,11 @@ export function initRoundTripController({ map, store, waypointManager, recompute
       }
       waypointManager.replaceAll(waypoints);
       store.setState({ editingRouteId: null }, { silent: true });
-      // replaceAll ci-dessus a déjà déclenché un recalcul en fire-and-forget ;
-      // on attend explicitement sa fin pour que le bandeau de simplification
-      // affiché plus bas ne soit pas écrasé par le hideRouteError()/
-      // showRouteError() de ce calcul — même course critique que pour
-      // l'import GPX (voir gpx-controller.js).
-      await recomputeAndRender(waypoints);
+      // replaceAll ci-dessus a déclenché le calcul d'itinéraire ; on attend sa
+      // fin pour que le bandeau de simplification affiché plus bas ne soit
+      // pas écrasé par ce calcul — même course que pour l'import GPX (voir
+      // gpx-controller.js).
+      await waitForRecompute();
       if (result.simplified) {
         showBanner(
           "Le circuit généré était trop dense : seuls certains points ont été conservés comme waypoints.",
@@ -128,7 +133,9 @@ export function initRoundTripController({ map, store, waypointManager, recompute
     } catch (err) {
       showRouteError(err.message);
     } finally {
+      generating = false;
       generateBtn.disabled = false;
+      syncVariantButton();
     }
   }
 

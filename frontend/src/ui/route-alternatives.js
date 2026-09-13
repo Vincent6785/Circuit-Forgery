@@ -40,15 +40,27 @@ export function initRouteAlternatives({ store, routeLayer }) {
     list.innerHTML = "";
   }
 
-  store.subscribe((state) => {
+  function buttonState(state) {
     const relevant = state.waypoints.length === 2;
     const blockedByAvoidZones = relevant && state.avoidZones.length > 0;
     const blockedBySpeedLimit = relevant && state.speedLimitKmh !== null;
-    const blocked = blockedByAvoidZones || blockedBySpeedLimit;
+    const title = blockedByAvoidZones ? AVOID_ZONE_TITLE : blockedBySpeedLimit ? SPEED_LIMIT_TITLE : DEFAULT_TITLE;
+    return { relevant, blocked: blockedByAvoidZones || blockedBySpeedLimit, title };
+  }
+
+  let lastWaypoints = null;
+  store.subscribe((state) => {
+    const { relevant, blocked, title } = buttonState(state);
     btn.classList.toggle("hidden", !relevant);
     btn.disabled = blocked;
-    btn.title = blockedByAvoidZones ? AVOID_ZONE_TITLE : blockedBySpeedLimit ? SPEED_LIMIT_TITLE : DEFAULT_TITLE;
-    if (!relevant || blocked) reset();
+    btn.title = title;
+    // Les alternatives affichées ne valent que pour la paire de points pour
+    // laquelle elles ont été calculées : déplacer A ou B (toujours deux
+    // points) ou charger un autre trajet doit aussi les invalider, sans quoi
+    // en choisir une dessinait un tracé ne passant plus par les marqueurs.
+    const waypointsChanged = state.waypoints !== lastWaypoints;
+    lastWaypoints = state.waypoints;
+    if (!relevant || blocked || waypointsChanged) reset();
   });
 
   btn.addEventListener("click", async () => {
@@ -68,7 +80,9 @@ export function initRouteAlternatives({ store, routeLayer }) {
       if (seq !== requestSeq) return;
       showRouteError(err.message);
     } finally {
-      btn.disabled = false;
+      // Pas simplement false : une zone ou une limite ajoutée pendant la
+      // requête doit laisser le bouton désactivé.
+      btn.disabled = buttonState(store.getState()).blocked;
     }
   });
 }

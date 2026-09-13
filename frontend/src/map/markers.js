@@ -2,6 +2,7 @@ import L from "leaflet";
 import { roleForIndex } from "./waypoint-role.js";
 import { buildDivIcon } from "./icon-utils.js";
 import { indexForNewPoint } from "../utils/itinerary.js";
+import { normalizeIds } from "../utils/waypoint-ids.js";
 
 const PIN_SIZE = 26;
 const MARKER_HINT = "glisser pour déplacer · clic droit pour supprimer";
@@ -231,7 +232,9 @@ export class WaypointManager {
    * brouillon) ne doit pas permettre d'annuler vers l'état d'un trajet
    * précédent sans rapport. */
   setPointsSilently(points) {
-    this._points = points.map((p) => ({ id: p.id ?? newId(), lat: p.lat, lon: p.lon, label: p.label ?? null }));
+    const { points: normalized, nextId } = normalizeIds(points, _nextId);
+    _nextId = nextId;
+    this._points = normalized.map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.label ?? null }));
     this._selectedId = null;
     this._history.reset();
     this._render();

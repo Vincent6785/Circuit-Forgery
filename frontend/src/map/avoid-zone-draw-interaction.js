@@ -1,4 +1,5 @@
 import L from "leaflet";
+import { isEventInside } from "./dom-utils.js";
 
 const ZONE_COLOR = "#c62828";
 const MIN_RADIUS_M = 20; // en dessous, on considère que c'est un clic accidentel plutôt qu'un vrai glissé
@@ -14,7 +15,9 @@ const MIN_RADIUS_M = 20; // en dessous, on considère que c'est un clic accident
  * nul (tap/clic sans glisser réel, < MIN_RADIUS_M) et que cette fonction
  * renvoie une valeur positive, celle-ci est utilisée comme rayon au lieu
  * d'ignorer l'interaction — une voie tactile/précise en complément du
- * glisser. */
+ * glisser.
+ *
+ * Un relâchement hors de la carte ou Échap annulent le tracé. */
 export class AvoidZoneDrawInteraction {
   constructor(map, onZoneDrawn, getPresetRadiusM) {
     this._map = map;
@@ -37,10 +40,13 @@ export class AvoidZoneDrawInteraction {
   }
 
   _onMouseDown(e) {
-    if (!this._active) return;
+    // Bouton principal uniquement : le clic droit reste celui du menu de
+    // création de point d'intérêt.
+    if (!this._active || e.originalEvent?.button !== 0) return;
     L.DomEvent.stop(e);
     this._map.dragging.disable();
     const center = e.latlng;
+    const container = this._map.getContainer();
 
     this._ghost = L.circle(center, {
       radius: 1,
@@ -48,19 +54,22 @@ export class AvoidZoneDrawInteraction {
       weight: 2,
       fillColor: ZONE_COLOR,
       fillOpacity: 0.15,
+      interactive: false,
     }).addTo(this._map);
 
     const onMove = (ev) => {
-      this._ghost.setRadius(Math.max(center.distanceTo(ev.latlng), 1));
+      this._ghost?.setRadius(Math.max(center.distanceTo(this._map.mouseEventToLatLng(ev)), 1));
     };
-    const onUp = (ev) => {
-      this._map.off("mousemove", onMove);
-      this._map.off("mouseup", onUp);
+    const finish = (ev) => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("keydown", onKeyDown);
       this._map.dragging.enable();
-      const radiusM = center.distanceTo(ev.latlng);
-      this._ghost.remove();
+      this._ghost?.remove();
       this._ghost = null;
+      if (!ev || !isEventInside(container, ev)) return;
 
+      const radiusM = center.distanceTo(this._map.mouseEventToLatLng(ev));
       if (radiusM >= MIN_RADIUS_M) {
         this._onZoneDrawn(center.lat, center.lng, radiusM);
         return;
@@ -70,8 +79,16 @@ export class AvoidZoneDrawInteraction {
         this._onZoneDrawn(center.lat, center.lng, preset);
       }
     };
+    // Écoute sur document plutôt que sur la carte : un relâchement hors de la
+    // carte doit aussi terminer le tracé, sinon le déplacement de la carte
+    // restait désactivé et le cercle fantôme affiché.
+    const onUp = (ev) => finish(ev);
+    const onKeyDown = (ev) => {
+      if (ev.key === "Escape") finish(null);
+    };
 
-    this._map.on("mousemove", onMove);
-    this._map.on("mouseup", onUp);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.addEventListener("keydown", onKeyDown);
   }
 }

@@ -8,8 +8,12 @@ import { roleForIndex } from "../map/waypoint-role.js";
 let _editingId = null;
 let _lastArgs = null;
 
+// Type de données propre au glisser-déposer de la liste : un texte déposé
+// depuis l'extérieur (text/plain) ne doit pas être interprété comme un index.
+const DRAG_TYPE = "application/x-circuit-forgery-waypoint-index";
+
 function _rerender() {
-  if (_lastArgs) renderWaypointList(..._lastArgs);
+  if (_lastArgs) _renderList(..._lastArgs);
 }
 
 function _legDistanceM(idx, computedRoute) {
@@ -30,7 +34,24 @@ function _legDistanceM(idx, computedRoute) {
  * pour afficher la distance depuis l'étape précédente.
  */
 export function renderWaypointList(waypoints, waypointManager, computedRoute) {
+  const sameWaypoints = _lastArgs !== null && _lastArgs[0] === waypoints;
   _lastArgs = [waypoints, waypointManager, computedRoute];
+
+  if (_editingId !== null) {
+    if (!waypoints.some((wp) => wp.id === _editingId)) {
+      _editingId = null; // point édité supprimé entre-temps (annuler, clic droit…)
+    } else if (sameWaypoints) {
+      // Seul le tracé a changé (un calcul qui se termine) : reconstruire la
+      // liste ferait perdre la saisie et le focus du formulaire en cours. Le
+      // rendu reprendra à la validation ou à l'annulation, avec les
+      // derniers arguments reçus.
+      return;
+    }
+  }
+  _renderList(waypoints, waypointManager, computedRoute);
+}
+
+function _renderList(waypoints, waypointManager, computedRoute) {
   const container = document.getElementById("waypoint-list");
   container.innerHTML = "";
 
@@ -102,18 +123,23 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
     li.appendChild(delBtn);
 
     li.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData(DRAG_TYPE, String(idx));
+      // Firefox ne démarre un glisser que si text/plain est aussi renseigné.
       e.dataTransfer.setData("text/plain", String(idx));
       e.dataTransfer.effectAllowed = "move";
     });
     li.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
     });
     li.addEventListener("drop", (e) => {
+      const raw = e.dataTransfer.getData(DRAG_TYPE);
+      if (raw === "") return;
       e.preventDefault();
-      const fromIndex = Number(e.dataTransfer.getData("text/plain"));
-      const toIndex = Number(li.dataset.index);
-      waypointManager.reorder(fromIndex, toIndex);
+      const fromIndex = Number(raw);
+      if (!Number.isInteger(fromIndex)) return;
+      waypointManager.reorder(fromIndex, Number(li.dataset.index));
     });
 
     container.appendChild(li);

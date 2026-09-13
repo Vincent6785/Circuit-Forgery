@@ -94,3 +94,34 @@ test("annulation d'une édition ne modifie pas le trajet sauvegardé", async ({ 
 
   await request.delete(`/api/routes/${stillOriginal.id}`);
 });
+
+test("supprimer le trajet en cours de modification quitte le mode modification", async ({ page, request }) => {
+  const name = ROUTE_NAME + " Suppression";
+  await page.goto("/");
+  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
+  await clickMapAt(page, POINT_A.lat, POINT_A.lon);
+  await clickMapAt(page, POINT_B.lat, POINT_B.lon);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
+  await page.fill("#save-route-name-input", name);
+  await page.locator("#save-route-btn").click();
+
+  await openTab(page, "saved");
+  const savedItem = page.locator("#saved-routes-list li", { hasText: name });
+  await savedItem.locator("button", { hasText: "✎" }).click();
+  await expect(page.locator("#update-route-btn")).toBeVisible();
+
+  await openTab(page, "saved");
+  page.once("dialog", (dialog) => dialog.accept());
+  await savedItem.locator("button", { hasText: "✕" }).click();
+  await expect(savedItem).toHaveCount(0);
+
+  await expect(page.locator("#update-route-btn")).toBeHidden();
+  await expect(page.locator("#save-route-btn")).toBeVisible();
+  await expect(page.locator("#route-error")).toHaveClass(/info/);
+  await expect(page.locator("#waypoint-list li")).toHaveCount(2);
+
+  const routes = await request.get("/api/routes").then((r) => r.json());
+  for (const route of routes.filter((r) => r.name === name)) {
+    await request.delete(`/api/routes/${route.id}`);
+  }
+});

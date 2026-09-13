@@ -3,15 +3,18 @@ import { exportGpxUrl } from "../api/gpx.js";
 import { showRouteError } from "./sidebar.js";
 import { renderListPanel } from "./list-panel.js";
 
-export function refreshSavedRoutesList(onSelect, onEdit, onDuplicate) {
+/** handlers : { onSelect, onEdit, onDuplicate, onDeleted } — onDeleted(route)
+ * est appelé après une suppression réussie, pour que l'éditeur sorte du mode
+ * modification si c'est le trajet en cours qui vient d'être supprimé. */
+export function refreshSavedRoutesList(handlers) {
   return renderListPanel("saved-routes-list", _listRoutesFavoritesFirst, {
-    renderLabel: (route) => _label(route, onSelect),
+    renderLabel: (route) => _label(route, handlers.onSelect),
     renderActions: (route) => [
-      _editButton(route, onEdit),
-      _duplicateButton(route, onDuplicate),
+      _editButton(route, handlers.onEdit),
+      _duplicateButton(route, handlers.onDuplicate),
       _exportLink(route),
-      _favoriteButton(route, onSelect, onEdit, onDuplicate),
-      _deleteButton(route, onSelect, onEdit, onDuplicate),
+      _favoriteButton(route, handlers),
+      _deleteButton(route, handlers),
     ],
   });
 }
@@ -68,7 +71,7 @@ function _exportLink(route) {
   return exportLink;
 }
 
-function _favoriteButton(route, onSelect, onEdit, onDuplicate) {
+function _favoriteButton(route, handlers) {
   const favBtn = document.createElement("button");
   favBtn.textContent = route.is_favorite ? "☆" : "★";
   favBtn.title = "Basculer favori";
@@ -78,17 +81,21 @@ function _favoriteButton(route, onSelect, onEdit, onDuplicate) {
   );
   favBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
+    // Un double clic enverrait sinon deux fois la même bascule, calculée
+    // depuis la même valeur is_favorite périmée.
+    favBtn.disabled = true;
     try {
       await updateRoute(route.id, { is_favorite: !route.is_favorite });
-      refreshSavedRoutesList(onSelect, onEdit, onDuplicate);
+      refreshSavedRoutesList(handlers);
     } catch (err) {
+      favBtn.disabled = false;
       showRouteError(err.message);
     }
   });
   return favBtn;
 }
 
-function _deleteButton(route, onSelect, onEdit, onDuplicate) {
+function _deleteButton(route, handlers) {
   const delBtn = document.createElement("button");
   delBtn.textContent = "✕";
   delBtn.title = "Supprimer";
@@ -96,10 +103,13 @@ function _deleteButton(route, onSelect, onEdit, onDuplicate) {
   delBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
     if (!confirm(`Supprimer définitivement le trajet "${route.name}" ?`)) return;
+    delBtn.disabled = true;
     try {
       await deleteRoute(route.id);
-      refreshSavedRoutesList(onSelect, onEdit, onDuplicate);
+      handlers.onDeleted?.(route);
+      refreshSavedRoutesList(handlers);
     } catch (err) {
+      delBtn.disabled = false;
       showRouteError(err.message);
     }
   });

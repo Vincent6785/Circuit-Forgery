@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, openRouteOptions, openTab } from "./helpers.js";
+import { clickMapAt, mapPointAt, openRouteOptions, openTab } from "./helpers.js";
 
 async function setupParisView(page) {
   await page.goto("/");
@@ -170,4 +170,21 @@ test("le filtre anti->80km/h reste actif avec une zone à éviter active", async
   for (const speed of speeds) {
     expect(speed).toBeLessThanOrEqual(80);
   }
+});
+
+test("relâcher le dessin d'une zone hors de la carte annule sans bloquer la carte", async ({ page }) => {
+  // Régression : le relâchement n'était écouté que sur la carte ; hors de la
+  // carte, le déplacement restait désactivé et le cercle fantôme affiché.
+  await setupParisView(page);
+  await page.locator("#avoid-zone-toggle-btn").click();
+
+  const center = await mapPointAt(page, 48.865, 2.325);
+  const sidebar = await page.locator("#sidebar").boundingBox();
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(sidebar.x + sidebar.width / 2, sidebar.y + sidebar.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  expect(await page.evaluate(() => window.__getAvoidZones())).toHaveLength(0);
+  expect(await page.evaluate(() => window.__map.dragging.enabled())).toBe(true);
 });
