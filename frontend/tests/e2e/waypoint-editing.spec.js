@@ -77,7 +77,10 @@ test("sélection d'un marqueur puis suppression au clavier (touche Suppr)", asyn
   await page.keyboard.press("Delete");
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
 
-  await page.locator(".leaflet-marker-icon").first().click();
+  // Cible une épingle de waypoint, pas n'importe quel marqueur : un point
+  // d'intérêt créé par une autre suite en parallèle (base partagée) peut
+  // aussi apparaître sur la carte.
+  await page.locator(".wp-pin").first().click();
   await page.keyboard.press("Delete");
 
   await expect(page.locator("#waypoint-list li")).toHaveCount(1);

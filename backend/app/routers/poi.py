@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PointOfInterest
@@ -10,7 +11,7 @@ router = APIRouter(prefix="/api/poi", tags=["poi"])
 
 @router.get("", response_model=list[PointOfInterestOut])
 def list_poi(db: Session = Depends(get_db)):
-    return db.query(PointOfInterest).order_by(PointOfInterest.created_at.desc()).all()
+    return db.scalars(select(PointOfInterest).order_by(PointOfInterest.created_at.desc())).all()
 
 
 @router.post("", response_model=PointOfInterestOut, status_code=201)

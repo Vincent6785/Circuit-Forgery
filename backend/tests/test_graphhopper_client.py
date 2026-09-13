@@ -230,3 +230,36 @@ async def test_connection_error_does_not_leak_internal_url():
         await _client().route([(0, 0), (1, 1)])
     assert str(exc_info.value) == UNAVAILABLE_MESSAGE
     assert "gh-test" not in str(exc_info.value)
+
+
+@respx.mock
+async def test_health_uses_native_health_endpoint():
+    health = respx.get(f"{BASE_URL}/health").mock(return_value=httpx.Response(200, text="OK"))
+    route = respx.get(f"{BASE_URL}/route")
+    assert await _client().health() is True
+    assert health.called
+    assert not route.called
+
+
+@respx.mock
+async def test_health_is_false_on_error_status_or_connection_failure():
+    respx.get(f"{BASE_URL}/health").mock(return_value=httpx.Response(503))
+    assert await _client().health() is False
+    respx.get(f"{BASE_URL}/health").mock(side_effect=httpx.ConnectError("refusée"))
+    assert await _client().health() is False
+
+
+@respx.mock
+async def test_client_reuses_connection_pool_and_recreates_it_after_close():
+    respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(200, json={"paths": [_path()]}))
+    client = _client()
+    await client.route([(0, 0), (1, 1)])
+    pool = client._http.client
+    await client.route([(0, 0), (1, 1)])
+    assert client._http.client is pool
+
+    await client.aclose()
+    assert pool.is_closed
+    await client.route([(0, 0), (1, 1)])
+    assert client._http.client is not pool
+    await client.aclose()

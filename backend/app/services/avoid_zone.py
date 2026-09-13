@@ -3,7 +3,7 @@ from typing import Optional
 
 from app.schemas.route import AvoidZone
 
-_EARTH_RADIUS_M = 6_371_000
+from app.services.geo import EARTH_RADIUS_M as _EARTH_RADIUS_M  # noqa: E402
 
 
 def circle_to_polygon(lat: float, lon: float, radius_m: float, n: int = 24) -> list[list[float]]:

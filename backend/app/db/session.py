@@ -1,9 +1,13 @@
 import os
+from collections.abc import Iterator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
+
+# Attente maximale d'un verrou SQLite avant d'échouer (écriture concurrente).
+_BUSY_TIMEOUT_MS = 5000
 
 
 class Base(DeclarativeBase):
@@ -19,9 +23,27 @@ def ensure_database_dir(database_path: str) -> None:
         os.makedirs(directory, exist_ok=True)
 
 
+def create_sqlite_engine(database_path: str) -> Engine:
+    """Engine SQLite configuré pour un serveur web : mode WAL (les lectures ne
+    sont plus bloquées par une écriture en cours) et attente d'un verrou
+    plutôt qu'un échec immédiat "database is locked"."""
+    engine = create_engine(f"sqlite:///{database_path}", connect_args={"check_same_thread": False})
+
+    @event.listens_for(engine, "connect")
+    def _configure_connection(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        finally:
+            cursor.close()
+
+    return engine
+
+
 ensure_database_dir(settings.database_path)
 
-engine = create_engine(f"sqlite:///{settings.database_path}", connect_args={"check_same_thread": False})
+engine = create_sqlite_engine(settings.database_path)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -51,7 +73,7 @@ def _apply_additive_migrations() -> None:
             conn.execute(text("ALTER TABLE routes ADD COLUMN no_speed_limit BOOLEAN NOT NULL DEFAULT 0"))
 
 
-def get_db() -> Session:
+def get_db() -> Iterator[Session]:
     db = SessionLocal()
     try:
         yield db

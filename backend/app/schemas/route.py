@@ -207,6 +207,20 @@ class RouteOut(BaseModel):
     no_speed_limit: bool = False
 
 
+class RouteSummaryOut(BaseModel):
+    """Trajet tel qu'affiché dans la liste des trajets sauvegardés, sans
+    points ni géométrie (GET /api/routes?view=summary)."""
+
+    id: int
+    name: str
+    description: Optional[str] = None
+    distance_m: float
+    duration_s: float
+    is_favorite: bool
+    created_at: UtcDatetime
+    updated_at: Optional[UtcDatetime] = None
+
+
 class GeocodeResult(BaseModel):
     label: str
     lat: float

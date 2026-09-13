@@ -287,6 +287,8 @@ ajuster :
 | `CF_MAX_GPX_UPLOAD_BYTES` | `5000000` | Taille maximale d'un fichier GPX importé |
 | `CF_MAX_REQUEST_BODY_BYTES` | `10000000` | Taille maximale d'un corps de requête, refusée en 413 avant sa lecture complète |
 | `CF_LOG_LEVEL` | `INFO` | Niveau des journaux du backend (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
+
+Sondes de santé du backend : `/api/health/live` (le serveur répond, utilisée par le healthcheck Docker), `/api/health/ready` (503 tant que GraphHopper ou la base ne répondent pas) et `/api/health` (état détaillé, toujours 200).
 | `CF_NOMINATIM_URL` | `https://nominatim.openstreetmap.org` | Serveur Nominatim utilisé pour la recherche d'adresse |
 
 La heap JVM de GraphHopper se règle séparément via `JAVA_OPTS` dans

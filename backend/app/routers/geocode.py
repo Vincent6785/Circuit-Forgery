@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas.route import GeocodeResult
-from app.services.geocoding_client import geocoding_client
+from app.services.geocoding_client import GeocodingRateLimitedError, geocoding_client
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +14,8 @@ router = APIRouter(prefix="/api", tags=["geocode"])
 async def geocode(q: str = Query(..., min_length=3, max_length=200)):
     try:
         return await geocoding_client.search(q)
+    except GeocodingRateLimitedError as exc:
+        raise HTTPException(429, str(exc)) from None
     except Exception:
         # Le détail (URL amont, réponse inattendue de Nominatim) reste dans
         # les journaux : il n'a pas à être renvoyé au client.

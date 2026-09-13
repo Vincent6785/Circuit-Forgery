@@ -3,7 +3,7 @@ from typing import Optional
 
 from app.schemas.route import ComputeRouteResponse, WaypointOut
 
-_EARTH_RADIUS_M = 6_371_000
+from app.services.geo import EARTH_RADIUS_M as _EARTH_RADIUS_M  # noqa: E402
 
 
 def _expand_detail(detail: list, num_points: int) -> list[Optional[object]]:

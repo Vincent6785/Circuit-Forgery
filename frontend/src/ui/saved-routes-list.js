@@ -1,9 +1,12 @@
-import { deleteRoute, listRoutes, updateRoute } from "../api/saved-routes.js";
+import { deleteRoute, listRouteSummaries, updateRoute } from "../api/saved-routes.js";
 import { exportGpxUrl } from "../api/gpx.js";
 import { showRouteError } from "./sidebar.js";
 import { renderListPanel } from "./list-panel.js";
 
-/** handlers : { onSelect, onEdit, onDuplicate, onDeleted } — onDeleted(route)
+/** Les éléments listés sont des résumés (sans points ni géométrie) : les
+ * gestionnaires chargent eux-mêmes le détail du trajet ouvert.
+ *
+ * handlers : { onSelect, onEdit, onDuplicate, onDeleted } — onDeleted(route)
  * est appelé après une suppression réussie, pour que l'éditeur sorte du mode
  * modification si c'est le trajet en cours qui vient d'être supprimé. */
 export function refreshSavedRoutesList(handlers) {
@@ -23,7 +26,7 @@ export function refreshSavedRoutesList(handlers) {
  * JS) : l'ordre created_at DESC déjà renvoyé par l'API est préservé au sein
  * de chaque groupe favori/non-favori, sans avoir à le recalculer ici. */
 async function _listRoutesFavoritesFirst() {
-  const routes = await listRoutes();
+  const routes = await listRouteSummaries();
   return [...routes].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite));
 }
 
