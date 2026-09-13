@@ -247,6 +247,14 @@ class PointOfInterestOut(BaseModel):
     created_at: UtcDatetime
 
 
+class GpxExportRequest(RequestModel):
+    """Trajet courant, sauvegardé ou non, à exporter en GPX."""
+
+    name: Optional[RouteName] = None
+    waypoints: list[Waypoint] = Field(min_length=2)
+    geometry_geojson: LineStringGeometry
+
+
 class GpxImportResponse(BaseModel):
     waypoints: list[WaypointOut]
     truncated: bool = False

@@ -23,6 +23,10 @@ publie les images Docker correspondantes.
   `GET /api/config`).
 - Vérification de types (JSDoc + TypeScript) des modules frontend `utils`,
   `state` et `api`, exécutée en CI.
+- Export GPX du trajet affiché, même non sauvegardé (`POST /api/gpx/export`).
+- Renommage d'un trajet en mode modification.
+- Gestes tactiles (Pointer Events) pour glisser le tracé et dessiner une zone
+  à éviter ; panneau repliable sur mobile ; indicateur de calcul en cours.
 
 ### Modifié
 

@@ -32,7 +32,7 @@ const FORCED_POINT_HINT = "Cliquez le point que le circuit devra traverser…";
  * que dans une variable locale, pour la même raison — sinon "Nouvelle
  * variante" resterait activé après un "Effacer les points"/chargement d'un
  * trajet et régénérerait un circuit sans rapport à la place. */
-export function initRoundTripController({ map, store, waypointManager, waitForRecompute }) {
+export function initRoundTripController({ map, store, waypointManager, waitForRecompute, trackBusy = (promise) => promise }) {
   const distanceInput = document.getElementById("round-trip-distance-input");
   const generateBtn = document.getElementById("round-trip-generate-btn");
   const variantBtn = document.getElementById("round-trip-variant-btn");
@@ -98,7 +98,9 @@ export function initRoundTripController({ map, store, waypointManager, waitForRe
     syncVariantButton();
     try {
       const { avoidZones, speedLimitKmh, noSpeedLimit, pendingForcedPoint } = store.getState();
-      const result = await computeRoundTrip({ lat, lon }, distanceM, seed, avoidZones, speedLimitKmh, noSpeedLimit);
+      const result = await trackBusy(
+        computeRoundTrip({ lat, lon }, distanceM, seed, avoidZones, speedLimitKmh, noSpeedLimit)
+      );
       let waypoints = result.waypoints;
       if (pendingForcedPoint) {
         // Le point de passage n'est pas forcément sur le tracé généré (il a

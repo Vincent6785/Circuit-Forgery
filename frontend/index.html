@@ -9,7 +9,11 @@
   <div id="app">
     <aside id="sidebar">
       <header class="sidebar-header">
-        <h1>Circuit Forgery</h1>
+        <div class="sidebar-title">
+          <h1>Circuit Forgery</h1>
+          <!-- Petits écrans uniquement (style.css) : replie le panneau pour agrandir la carte. -->
+          <button type="button" id="sidebar-toggle" aria-expanded="true" aria-controls="sidebar-content">Agrandir la carte</button>
+        </div>
         <div class="tabs" role="tablist" aria-label="Mode de création">
           <button type="button" class="tab" role="tab" id="tab-route" data-tab="route" aria-controls="tabpanel-route" aria-selected="true">
             <span aria-hidden="true">🧭</span> Itinéraire
@@ -23,7 +27,7 @@
         </div>
       </header>
 
-      <div class="sidebar-scroll">
+      <div class="sidebar-scroll" id="sidebar-content">
         <section id="tabpanel-route" role="tabpanel" aria-labelledby="tab-route" data-tabs="route">
           <div id="itinerary-panel" class="panel">
             <div class="itinerary-field">
@@ -54,7 +58,7 @@
                 <li>Clic : pose le départ, puis l'arrivée, puis ajoute une étape là où elle allonge le moins le trajet.</li>
                 <li><kbd>Maj</kbd> + clic : prolonge le trajet, le point devient la nouvelle arrivée.</li>
                 <li>Glisser un point pour le déplacer, glisser le tracé pour ajouter une étape.</li>
-                <li>Clic droit sur un point pour le supprimer (ou clic puis <kbd>Suppr</kbd>).</li>
+                <li>Clic droit (ou appui long au doigt) sur un point pour le supprimer, ou clic puis <kbd>Suppr</kbd>.</li>
               </ul>
             </details>
           </div>
@@ -172,6 +176,8 @@
       <footer class="sidebar-footer">
         <div id="route-error" class="panel hidden" role="alert" aria-live="polite"></div>
 
+        <p id="route-busy" class="hidden" role="status" aria-live="polite">Calcul en cours…</p>
+
         <div id="route-info" class="panel hidden">
           <h2>Trajet</h2>
           <p><strong id="route-distance"></strong> — <span id="route-duration"></span></p>
@@ -197,6 +203,7 @@
           <button id="save-route-btn">Sauvegarder ce trajet</button>
           <button id="update-route-btn" class="hidden">Enregistrer les modifications</button>
           <button id="cancel-edit-btn" class="hidden">Annuler la modification</button>
+          <button id="export-gpx-btn" type="button">⬇ Exporter en GPX</button>
         </div>
       </footer>
     </aside>

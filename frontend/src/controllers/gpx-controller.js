@@ -4,13 +4,13 @@ import { showRouteError, showBanner } from "../ui/sidebar.js";
 /** Câble l'input d'import GPX de la sidebar : les points sont extraits puis
  * recalculés via le moteur de routage habituel, jamais rejoués tels quels,
  * pour que le filtre anti-80km/h s'applique aussi aux trajets importés. */
-export function initGpxController({ store, waypointManager, waitForRecompute }) {
+export function initGpxController({ store, waypointManager, waitForRecompute, trackBusy = (promise) => promise }) {
   document.getElementById("gpx-import-input").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     e.target.value = ""; // sans ça, réimporter le même fichier ne redéclenche pas "change"
     if (!file) return;
     try {
-      const { waypoints, truncated } = await importGpx(file);
+      const { waypoints, truncated } = await trackBusy(importGpx(file));
       waypointManager.replaceAll(waypoints);
       store.setState({ editingRouteId: null });
       // replaceAll ci-dessus a déclenché le calcul d'itinéraire ; on attend sa

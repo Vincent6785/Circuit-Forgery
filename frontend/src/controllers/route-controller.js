@@ -7,13 +7,16 @@ import { clearDraft } from "../state/draft-storage.js";
 import { switchTab } from "../ui/tabs.js";
 import { createLatestRequest } from "../api/latest-request.js";
 import { isSameRoute } from "../utils/route-match.js";
+import { exportRouteGpx } from "../api/gpx.js";
+import { downloadBlob } from "../ui/download.js";
+import { gpxFileName } from "../utils/filename.js";
 
 /**
  * Câble la sidebar "Trajet" : calcul et rendu du tracé courant, sauvegarde,
  * édition d'un trajet existant, effacement. Reçoit le store et les objets
  * carte déjà construits par main.js au lieu de les recréer ici.
  */
-export function initRouteController({ store, waypointManager, routeLayer, draftAutosave }) {
+export function initRouteController({ store, waypointManager, routeLayer, draftAutosave, trackBusy = (promise) => promise }) {
   // "Dernier appel gagne" : une mutation qui arrive pendant un calcul annule
   // la requête précédente, dont le résultat ne peut plus mettre à jour le DOM.
   const routeRequest = createLatestRequest();
@@ -40,8 +43,8 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     const { avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
     let outcome;
     try {
-      outcome = await routeRequest.run((signal) =>
-        computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit, { signal })
+      outcome = await trackBusy(
+        routeRequest.run((signal) => computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit, { signal }))
       );
     } catch (err) {
       showRouteError(err.message);
@@ -111,8 +114,8 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
   store.subscribe(
     (state) => {
       const editing = state.editingRouteId !== null;
+      // Le champ nom reste affiché en modification : il sert aussi à renommer le trajet.
       document.getElementById("save-route-btn").classList.toggle("hidden", editing);
-      document.getElementById("save-route-name-input").classList.toggle("hidden", editing);
       document.getElementById("update-route-btn").classList.toggle("hidden", !editing);
       document.getElementById("cancel-edit-btn").classList.toggle("hidden", !editing);
     },
@@ -180,13 +183,45 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     }
   });
 
+  /** Export GPX du trajet affiché, sauvegardé ou non : le nom saisi (s'il y en
+   * a un) sert de nom de trajet et de fichier. */
+  document.getElementById("export-gpx-btn").addEventListener("click", async (e) => {
+    const { waypoints, computedRoute } = store.getState();
+    if (!computedRoute?.geometry_geojson || waypoints.length < 2) return;
+    const name = document.getElementById("save-route-name-input").value.trim() || null;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const blob = await trackBusy(
+        exportRouteGpx({
+          name,
+          waypoints: waypoints.map((p) => ({ lat: p.lat, lon: p.lon, label: p.label || null })),
+          geometry_geojson: computedRoute.geometry_geojson,
+        })
+      );
+      downloadBlob(blob, gpxFileName(name));
+      hideRouteError();
+    } catch (err) {
+      showRouteError(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   document.getElementById("update-route-btn").addEventListener("click", async (e) => {
     const { waypoints, computedRoute, editingRouteId, avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
     if (!computedRoute || editingRouteId === null) return;
+    const nameInput = document.getElementById("save-route-name-input");
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameInput.focus();
+      return;
+    }
     const btn = e.currentTarget;
     btn.disabled = true;
     try {
       await updateRoute(editingRouteId, {
+        name,
         description: document.getElementById("route-description-input").value.trim() || null,
         waypoints: waypoints.map((p) => ({ lat: p.lat, lon: p.lon, label: p.label || null })),
         distance_m: computedRoute.distance_m,
@@ -197,6 +232,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         no_speed_limit: noSpeedLimit,
       });
       hideRouteError();
+      nameInput.value = "";
       store.setState({ editingRouteId: null });
       refreshSavedRoutes();
       discardDraft();
@@ -244,9 +280,12 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     showRouteInfo(route.distance_m, route.duration_s);
     hideRouteError();
     document.getElementById("route-description-input").value = route.description || "";
-    // Incite à distinguer une copie de l'original, reste librement modifiable ;
-    // hors duplication, aucun nom résiduel d'un chargement précédent.
-    document.getElementById("save-route-name-input").value = prefillName ? `Copie de ${route.name}` : "";
+    // Duplication : incite à distinguer la copie de l'original. Modification :
+    // nom actuel, modifiable pour renommer. Aperçu : aucun nom résiduel d'un
+    // chargement précédent.
+    const nameInput = document.getElementById("save-route-name-input");
+    if (prefillName) nameInput.value = `Copie de ${route.name}`;
+    else nameInput.value = editingRouteId !== null ? route.name : "";
     store.setState(
       {
         computedRoute: {
@@ -270,7 +309,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     const seq = ++loadSeq;
     let route;
     try {
-      route = await getRoute(summary.id);
+      route = await trackBusy(getRoute(summary.id));
     } catch (err) {
       if (seq === loadSeq) showRouteError(err.message);
       return;
