@@ -4,7 +4,7 @@
 # aussi se construire avec le builder classique de Docker.
 
 # --- Stage 1: build du frontend statique (Leaflet bundlé, pas de dépendance CDN au runtime) ---
-FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS frontend-builder
+FROM node:26-bookworm-slim@sha256:cd9f682fa2885cd1056e830424764158570061c59736a1da836bc3d73df095ae AS frontend-builder
 WORKDIR /frontend
 # Lockfile copié avec package.json, puis `npm ci` : versions exactes du
 # lockfile, et échec s'il n'est plus synchronisé avec package.json — au lieu
