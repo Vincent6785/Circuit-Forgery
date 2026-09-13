@@ -358,6 +358,10 @@ npx playwright install --with-deps chromium   # une seule fois
 npm run test:e2e
 ```
 
+L'image de test porte son propre nom (`circuit-forgery-backend:e2e`) : pour
+revenir ensuite à l'image de production, relancer `docker compose up -d
+--build` sans l'override.
+
 `--with-deps` installe aussi les bibliothèques système nécessaires au
 navigateur headless ; le script est pensé pour Debian/Ubuntu et peut
 échouer sur Arch Linux (ou toute distro non supportée) — dans ce cas,

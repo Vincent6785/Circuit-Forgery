@@ -1,6 +1,8 @@
 # OSM data (large binary files, downloaded via scripts/download-osm-data.sh)
 data/osm/*.pbf
-data/osm/*.pbf.md5
+# Somme de contrôle, extrait précédent conservé, métadonnées, téléchargement en cours
+data/osm/*.pbf.*
+data/osm/.download/
 
 # GraphHopper compiled graph cache
 graphhopper/graph-cache/
