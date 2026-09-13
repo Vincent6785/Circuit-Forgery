@@ -7,6 +7,8 @@ publie les images Docker correspondantes.
 
 ## [Non publié]
 
+## [0.1.0] - 2026-09-14
+
 ### Ajouté
 
 - Itinéraire A → B éditable : champs Départ / Arrivée / Étape avec recherche
@@ -43,6 +45,9 @@ publie les images Docker correspondantes.
   confirmée dans le bouton lui-même au lieu de `window.confirm` ; accès
   internes de test absents du build de production ; tuiles sans sous-domaine
   `{s}`.
+- `CF_DATABASE_PATH` relatif refusé au démarrage du conteneur backend ; image
+  de test e2e construite sous son propre nom (`circuit-forgery-backend:e2e`) ;
+  fichiers dérivés de l'extrait OSM ignorés par git.
 
 ### Corrigé
 

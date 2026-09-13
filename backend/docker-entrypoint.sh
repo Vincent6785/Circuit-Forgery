@@ -10,7 +10,20 @@
 # commande.
 set -eu
 
-DATA_DIR="$(dirname "${CF_DATABASE_PATH:-/data/circuit-forgery.db}")"
+DB_PATH="${CF_DATABASE_PATH:-/data/circuit-forgery.db}"
+
+# Un chemin relatif se résout depuis /app : le répertoire de données serait
+# alors le code de l'application, remis à l'utilisateur "app" ci-dessous — et
+# la base, hors volume, perdue à la recréation du conteneur.
+case "$DB_PATH" in
+    /*) ;;
+    *)
+        echo "CF_DATABASE_PATH doit être un chemin absolu (reçu : $DB_PATH)" >&2
+        exit 1
+        ;;
+esac
+
+DATA_DIR="$(dirname "$DB_PATH")"
 
 if [ "$(id -u)" = "0" ]; then
     if [ "$DATA_DIR" != "/" ]; then

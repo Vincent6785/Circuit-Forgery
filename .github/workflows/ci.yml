@@ -130,6 +130,14 @@ jobs:
       - name: Le backend s'exécute sans privilèges root
         run: test "$(docker run --rm circuit-forgery-backend:ci id -u)" = "1000"
 
+      - name: Le backend refuse un CF_DATABASE_PATH relatif
+        # Accepté, il aurait fait remettre le code (/app) à l'utilisateur "app".
+        run: |
+          if docker run --rm -e CF_DATABASE_PATH=circuit-forgery.db circuit-forgery-backend:ci true; then
+            echo "Un CF_DATABASE_PATH relatif aurait dû être refusé" >&2
+            exit 1
+          fi
+
       - name: Analyse Trivy de l'image backend (bloquante)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
