@@ -31,8 +31,11 @@ export function hideRouteError() {
   hideBanner();
 }
 
+/** Arrondi à la minute avant de séparer heures et minutes : arrondir après
+ * le modulo affichait "1 h 60 min" pour 1 h 59 min 45 s. */
 export function formatDuration(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
+  const totalMinutes = Math.round(Math.max(0, seconds) / 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
   return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }

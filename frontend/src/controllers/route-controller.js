@@ -1,6 +1,6 @@
 import { createRoute, updateRoute } from "../api/saved-routes.js";
 import { computeRoute, toApiAvoidZones, fromApiAvoidZones } from "../api/routing.js";
-import { showRouteInfo, hideRouteInfo, showRouteError, hideRouteError } from "../ui/sidebar.js";
+import { showRouteInfo, hideRouteInfo, showRouteError, hideRouteError, showBanner } from "../ui/sidebar.js";
 import { refreshSavedRoutesList } from "../ui/saved-routes-list.js";
 import { renderWaypointList } from "../ui/waypoint-list.js";
 import { clearDraft } from "../state/draft-storage.js";
@@ -11,16 +11,19 @@ import { switchTab } from "../ui/tabs.js";
  * édition d'un trajet existant, effacement. Reçoit le store et les objets
  * carte déjà construits par main.js au lieu de les recréer ici.
  */
-export function initRouteController({ store, waypointManager, routeLayer }) {
-  // Garde-fou "dernier appel gagne" : deux mutations rapprochées (par
-  // exemple un import GPX, qui déclenche à la fois la notification
-  // automatique du store et un appel explicite pour séquencer un message
-  // post-recalcul) peuvent lancer deux calculs concurrents — seul le plus
-  // récent des deux doit être autorisé à mettre à jour le DOM à sa résolution.
+export function initRouteController({ store, waypointManager, routeLayer, draftAutosave }) {
+  // Garde-fou "dernier appel gagne" : deux mutations rapprochées peuvent
+  // lancer deux calculs concurrents — seul le plus récent des deux doit être
+  // autorisé à mettre à jour le DOM à sa résolution.
   let recomputeSeq = 0;
+  let currentComputation = Promise.resolve();
 
-  async function recomputeAndRender(waypoints) {
-    const seq = ++recomputeSeq;
+  function recomputeAndRender(waypoints) {
+    currentComputation = computeAndRender(waypoints, ++recomputeSeq);
+    return currentComputation;
+  }
+
+  async function computeAndRender(waypoints, seq) {
     if (waypoints.length < 2) {
       routeLayer.clear();
       hideRouteInfo();
@@ -42,19 +45,39 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
     }
   }
 
+  /** Attend la fin du calcul déclenché par la dernière mutation : l'import
+   * GPX et la génération de boucle s'en servent pour afficher leur bandeau
+   * après le calcul, sans relancer eux-mêmes un second calcul identique. */
+  function waitForRecompute() {
+    return currentComputation;
+  }
+
+  function discardDraft() {
+    draftAutosave?.cancel();
+    clearDraft();
+  }
+
   store.subscribe((state, meta) => {
     if (meta.silent) return;
     recomputeAndRender(state.waypoints);
   });
 
+  let renderedWaypoints = null;
+  let renderedRoute = null;
   store.subscribe((state) => {
-    const panel = document.getElementById("waypoint-list-panel");
-    panel.classList.toggle("hidden", state.waypoints.length === 0);
-    renderWaypointList(state.waypoints, waypointManager, state.computedRoute);
     document.getElementById("undo-waypoint-btn").disabled = !waypointManager.canUndo();
     document.getElementById("redo-waypoint-btn").disabled = !waypointManager.canRedo();
 
+    // La liste ne dépend que des points et du tracé : la reconstruire à
+    // chaque notification (vitesse, zones…) coûtait inutilement.
+    if (state.waypoints === renderedWaypoints && state.computedRoute === renderedRoute) return;
+    renderedWaypoints = state.waypoints;
+    renderedRoute = state.computedRoute;
+
     const wp = state.waypoints;
+    document.getElementById("waypoint-list-panel").classList.toggle("hidden", wp.length === 0);
+    renderWaypointList(wp, waypointManager, state.computedRoute);
+
     const first = wp[0];
     const last = wp[wp.length - 1];
     const alreadyClosed = wp.length >= 2 && first.lat === last.lat && first.lon === last.lon;
@@ -84,7 +107,7 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
     document.getElementById("cancel-edit-btn").classList.toggle("hidden", !editing);
   });
 
-  /** Remet le trajet courant à zéro : partagé par "Effacer les points" et
+  /** Remet le trajet courant à zéro : partagé par "Effacer le trajet" et
    * "Annuler" (édition) — corps strictement identique, dont un champ oublié
    * ici resterait invisible dans l'autre sans ce partage. */
   function resetRouteState() {
@@ -101,7 +124,7 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
       { silent: true }
     );
     document.getElementById("route-description-input").value = "";
-    clearDraft();
+    discardDraft();
   }
 
   document.getElementById("clear-route-btn").addEventListener("click", resetRouteState);
@@ -133,11 +156,11 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
       hideRouteError();
       nameInput.value = "";
       descriptionInput.value = "";
-      refreshSavedRoutesList(loadSavedRoute, enterEditMode, duplicateRoute);
-      // Sans ça, le brouillon local (draft-autosave.js) survit à la
-      // sauvegarde : un rechargement de page le restaure comme trajet non
-      // sauvegardé, et re-cliquer "Sauvegarder" crée un doublon en base.
-      clearDraft();
+      refreshSavedRoutes();
+      // Sans ça, le brouillon local survit à la sauvegarde : un rechargement
+      // de page le restaure comme trajet non sauvegardé, et re-cliquer
+      // "Sauvegarder" crée un doublon en base.
+      discardDraft();
     } catch (err) {
       showRouteError(err.message);
     } finally {
@@ -163,16 +186,36 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
       });
       hideRouteError();
       store.setState({ editingRouteId: null }, { silent: true });
-      refreshSavedRoutesList(loadSavedRoute, enterEditMode, duplicateRoute);
-      clearDraft();
+      refreshSavedRoutes();
+      discardDraft();
     } catch (err) {
-      showRouteError(err.message);
+      if (err.status === 404) {
+        leaveEditModeForDeletedRoute();
+      } else {
+        showRouteError(err.message);
+      }
     } finally {
       btn.disabled = false;
     }
   });
 
   document.getElementById("cancel-edit-btn").addEventListener("click", resetRouteState);
+
+  /** Le trajet en cours de modification n'existe plus (supprimé depuis la
+   * liste, ou depuis un autre appareil) : ses points restent affichés et
+   * peuvent être sauvegardés comme nouveau trajet, au lieu d'échouer en 404
+   * à chaque "Enregistrer les modifications". */
+  function leaveEditModeForDeletedRoute() {
+    store.setState({ editingRouteId: null }, { silent: true });
+    showBanner(
+      "Le trajet en cours de modification n'existe plus : ses points restent affichés, vous pouvez les sauvegarder comme nouveau trajet.",
+      { type: "info" }
+    );
+  }
+
+  function onRouteDeleted(route) {
+    if (store.getState().editingRouteId === route.id) leaveEditModeForDeletedRoute();
+  }
 
   /** Charge un trajet sauvegardé dans l'éditeur — partagé par les trois cas
    * d'usage (aperçu, édition, duplication), qui ne diffèrent que par
@@ -181,15 +224,17 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
   function applyLoadedRoute(route, { editingRouteId, prefillName = false } = {}) {
     // Ouvert depuis "Mes trajets" : on bascule là où ses points s'éditent.
     switchTab("route");
+    // Le brouillon en cours est remplacé par ce trajet : sans ça, un
+    // rechargement restaurait l'ancien brouillon à la place.
+    discardDraft();
     waypointManager.setPointsSilently(route.waypoints);
     routeLayer.draw(route.geometry_geojson, []);
     showRouteInfo(route.distance_m, route.duration_s);
     hideRouteError();
     document.getElementById("route-description-input").value = route.description || "";
-    if (prefillName) {
-      // Incite à distinguer la copie de l'original, reste librement modifiable.
-      document.getElementById("save-route-name-input").value = `Copie de ${route.name}`;
-    }
+    // Incite à distinguer une copie de l'original, reste librement modifiable ;
+    // hors duplication, aucun nom résiduel d'un chargement précédent.
+    document.getElementById("save-route-name-input").value = prefillName ? `Copie de ${route.name}` : "";
     store.setState(
       {
         computedRoute: {
@@ -222,7 +267,18 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
     applyLoadedRoute(route, { editingRouteId: null, prefillName: true });
   }
 
-  refreshSavedRoutesList(loadSavedRoute, enterEditMode, duplicateRoute);
+  const savedRoutesHandlers = {
+    onSelect: loadSavedRoute,
+    onEdit: enterEditMode,
+    onDuplicate: duplicateRoute,
+    onDeleted: onRouteDeleted,
+  };
 
-  return { recomputeAndRender };
+  function refreshSavedRoutes() {
+    refreshSavedRoutesList(savedRoutesHandlers);
+  }
+
+  refreshSavedRoutes();
+
+  return { recomputeAndRender, waitForRecompute };
 }

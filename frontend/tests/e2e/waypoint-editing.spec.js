@@ -82,3 +82,23 @@ test("sélection d'un marqueur puis suppression au clavier (touche Suppr)", asyn
 
   await expect(page.locator("#waypoint-list li")).toHaveCount(1);
 });
+
+test("déposer un texte externe sur la liste ne réordonne pas les points", async ({ page }) => {
+  // Régression : Number("texte") donnait NaN, et splice(NaN, 1) déplaçait le premier point.
+  await setupParisView(page);
+  await clickMapAt(page, 48.8566, 2.3522);
+  await clickMapAt(page, 48.8738, 2.295);
+  await clickMapAt(page, 48.87, 2.36);
+  const before = await page.evaluate(() => window.__getWaypoints().map((p) => p.id));
+
+  await page.evaluate(() => {
+    const target = document.querySelectorAll("#waypoint-list li")[2];
+    const dt = new DataTransfer();
+    dt.setData("text/plain", "bonjour");
+    target.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, bubbles: true, cancelable: true }));
+    target.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  });
+
+  const after = await page.evaluate(() => window.__getWaypoints().map((p) => p.id));
+  expect(after).toEqual(before);
+});

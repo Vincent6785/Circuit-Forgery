@@ -60,12 +60,20 @@ window.__getSpeedLimit = () => ({
   noSpeedLimit: store.getState().noSpeedLimit,
 }); // exposé uniquement pour Playwright
 
-initDraftAutosave(store);
+const draftAutosave = initDraftAutosave(store);
+// Une modification faite juste avant de fermer l'onglet (dans le délai de
+// l'autosave) serait sinon perdue.
+window.addEventListener("pagehide", () => draftAutosave.flush());
 
-const { recomputeAndRender } = initRouteController({ store, waypointManager, routeLayer });
+const { recomputeAndRender, waitForRecompute } = initRouteController({
+  store,
+  waypointManager,
+  routeLayer,
+  draftAutosave,
+});
 initItineraryController({ map, store, waypointManager });
-initGpxController({ store, waypointManager, recomputeAndRender });
-initRoundTripController({ map, store, waypointManager, recomputeAndRender });
+initGpxController({ store, waypointManager, waitForRecompute });
+initRoundTripController({ map, store, waypointManager, waitForRecompute });
 initAvoidZoneController({ map, store, waypointManager, history });
 initSpeedLimitController({ store });
 initRouteOptionsSummary(store);
@@ -105,10 +113,15 @@ if (draft && draft.waypoints?.length > 0) {
       noSpeedLimit: draft.noSpeedLimit || false,
       pendingForcedPoint: draft.pendingForcedPoint ?? null,
       roundTripVariant: draft.roundTripVariant ?? null,
+      editingRouteId: draft.editingRouteId ?? null,
     },
     { silent: true }
   );
-  if (draft.computedRoute) {
+  // Un tracé enregistré pour un autre nombre de points (brouillon écrit par
+  // une version antérieure, qui sauvegardait le tracé précédent) est
+  // recalculé plutôt qu'affiché.
+  const routeMatchesPoints = draft.computedRoute?.leg_boundaries?.length === draft.waypoints.length;
+  if (routeMatchesPoints) {
     routeLayer.draw(
       draft.computedRoute.geometry_geojson,
       draft.computedRoute.max_speed_by_segment,
