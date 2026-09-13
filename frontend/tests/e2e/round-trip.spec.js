@@ -1,10 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { openTab, openRouteOptions } from "./helpers.js";
 
 async function setupParisView(page) {
   await page.goto("/");
   await expect(page.locator("#map")).toBeVisible();
   await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
   await page.waitForTimeout(300);
+  await openTab(page, "loop");
 }
 
 async function clickMapAt(page, lat, lon) {
@@ -281,6 +283,7 @@ test("générer un circuit en boucle avec une zone à éviter active ne plante p
   // unitaire mocké couvrait le nouveau champ.
   await setupParisView(page);
 
+  await openRouteOptions(page);
   await page.locator("#avoid-zone-toggle-btn").click();
   await dragZone(page, 48.865, 2.325, 48.868, 2.328);
   await expect(page.locator("#avoid-zone-list li")).toHaveCount(1);
@@ -311,4 +314,20 @@ test("inverser le sens inverse l'ordre des waypoints", async ({ page }) => {
   const after = await page.evaluate(() => window.__getWaypoints().map((p) => p.id));
 
   expect(after).toEqual([...before].reverse());
+});
+
+test("quitter l'onglet Boucle annule le mode génération en attente", async ({ page }) => {
+  await setupParisView(page);
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await expect(page.locator("#round-trip-hint")).not.toHaveClass(/hidden/);
+
+  await openTab(page, "route");
+  await openTab(page, "loop");
+  await expect(page.locator("#round-trip-hint")).toHaveClass(/hidden/);
+
+  // Le clic suivant redevient un ajout de point ordinaire.
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#waypoint-list li")).toHaveCount(1);
 });

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt } from "./helpers.js";
+import { clickMapAt, openTab } from "./helpers.js";
 
 async function setupParisView(page) {
   await page.goto("/");
@@ -35,6 +35,7 @@ test("renommer un waypoint persiste après sauvegarde et rechargement", async ({
   const name = "Trajet Playwright Precision";
   await page.fill("#save-route-name-input", name);
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   await expect(page.locator("#saved-routes-list li", { hasText: name })).toBeVisible();
 
   const routes = await request.get("/api/routes").then((r) => r.json());
@@ -55,6 +56,7 @@ test("description de trajet sauvegardée, restaurée au rechargement et en édit
   await page.fill("#save-route-name-input", name);
   await page.fill("#route-description-input", description);
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   await expect(page.locator("#saved-routes-list li", { hasText: name })).toBeVisible();
 
   // Le champ se vide après une sauvegarde réussie, tout comme le nom.
@@ -65,6 +67,7 @@ test("description de trajet sauvegardée, restaurée au rechargement et en édit
   expect(created.description).toBe(description);
 
   await page.reload();
+  await openTab(page, "saved");
   await page
     .locator("#saved-routes-list li", { hasText: name })
     .locator("button", { hasText: "✎" })

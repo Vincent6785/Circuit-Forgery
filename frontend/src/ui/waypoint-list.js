@@ -35,7 +35,7 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
   container.innerHTML = "";
 
   waypoints.forEach((wp, idx) => {
-    const { label: roleLabel, color } = roleForIndex(idx, waypoints.length);
+    const { label: roleLabel, color, badge } = roleForIndex(idx, waypoints.length);
     const displayLabel = wp.label || roleLabel;
 
     const li = document.createElement("li");
@@ -46,6 +46,8 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
     const dot = document.createElement("span");
     dot.className = "waypoint-dot";
     dot.style.background = color;
+    dot.textContent = badge; // même badge que le marqueur sur la carte
+    dot.setAttribute("aria-hidden", "true");
     li.appendChild(dot);
 
     if (_editingId === wp.id) {

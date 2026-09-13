@@ -28,6 +28,21 @@ function poiIcon(category) {
   });
 }
 
+/** Contenu de popup construit en DOM (textContent) : nom et notes sont des
+ * saisies libres stockées en base, qu'une chaîne HTML passée à bindPopup
+ * interpréterait (XSS stockée). */
+function popupContent(poi) {
+  const container = document.createElement("div");
+  const name = document.createElement("strong");
+  name.textContent = poi.name;
+  container.appendChild(name);
+  if (poi.notes) {
+    container.appendChild(document.createElement("br"));
+    container.appendChild(document.createTextNode(poi.notes));
+  }
+  return container;
+}
+
 export class POILayer {
   constructor(map) {
     this._map = map;
@@ -38,8 +53,7 @@ export class POILayer {
     this._markers.forEach((m) => m.remove());
     this._markers = pois.map((poi) => {
       const marker = L.marker([poi.lat, poi.lon], { icon: poiIcon(poi.category) }).addTo(this._map);
-      const notes = poi.notes ? `<br>${poi.notes}` : "";
-      marker.bindPopup(`<strong>${poi.name}</strong>${notes}`);
+      marker.bindPopup(popupContent(poi));
       return marker;
     });
   }

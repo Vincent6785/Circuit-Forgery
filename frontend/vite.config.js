@@ -9,4 +9,10 @@ export default defineConfig({
       "/api": "http://localhost:8000",
     },
   },
+  test: {
+    // Explicite : sans ça, Vitest ramasserait aussi les *.spec.js Playwright
+    // de tests/e2e/.
+    include: ["tests/unit/**/*.test.js"],
+    environment: "node",
+  },
 });
