@@ -1,0 +1,41 @@
+name: CodeQL
+
+# Analyse statique de sécurité du code (backend Python, frontend JavaScript,
+# workflows GitHub Actions). Les résultats apparaissent dans l'onglet
+# Security > Code scanning du dépôt.
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+  schedule:
+    # Hebdomadaire : de nouvelles règles de détection peuvent révéler un
+    # problème dans du code inchangé.
+    - cron: "23 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyse (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          category: /language:${{ matrix.language }}

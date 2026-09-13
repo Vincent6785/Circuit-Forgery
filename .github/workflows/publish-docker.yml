@@ -1,34 +1,56 @@
 name: Publish Docker images
 
 # Se déclenche à chaque mise à jour de main (en pratique, à chaque merge de
-# PR — les pushs directs sont bloqués par la protection de branche) ; le
-# déclenchement manuel permet de valider le pipeline sans dépendre d'un
-# vrai merge.
+# PR — les pushs directs sont bloqués par la protection de branche) et à
+# chaque tag de version vX.Y.Z ; le déclenchement manuel permet de valider le
+# pipeline sans dépendre d'un vrai merge.
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deux publications rapprochées ne doivent pas se croiser (l'ordre des tags
+# latest en dépendrait) : la seconde attend la fin de la première.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   checks:
-    # Garde-fou avant publication : réutilise ci.yml (lint, pytest, build à
-    # blanc des deux images) plutôt que de dupliquer ses jobs — un run de
-    # plus ici est redondant avec celui de la PR qui a mené à ce merge, mais
-    # garde une dernière vérification sur l'état réel de main.
+    # Garde-fou avant publication : réutilise ci.yml (tests, audits, build et
+    # analyse des deux images) plutôt que de dupliquer ses jobs.
     uses: ./.github/workflows/ci.yml
 
   publish:
     needs: checks
+    # Un déclenchement manuel depuis une autre branche publierait sinon
+    # l'image :latest à partir de cette branche.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include:
+          - name: backend
+            context: .
+            file: backend/Dockerfile
+          - name: graphhopper
+            context: ./graphhopper
+            file: graphhopper/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -36,21 +58,28 @@ jobs:
 
       # Noms en minuscules codés en dur (contrainte GHCR, github.repository
       # contient des majuscules ici) plutôt que dérivés dynamiquement.
-      - name: Build et push l'image backend
-        uses: docker/build-push-action@v6
+      - name: Tags et labels OCI
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          context: .
-          file: backend/Dockerfile
-          push: true
+          images: ghcr.io/vincent6785/circuit-forgery-${{ matrix.name }}
           tags: |
-            ghcr.io/vincent6785/circuit-forgery-backend:latest
-            ghcr.io/vincent6785/circuit-forgery-backend:${{ github.sha }}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long,prefix=
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
-      - name: Build et push l'image graphhopper
-        uses: docker/build-push-action@v6
+      - name: Build et push de l'image ${{ matrix.name }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
-          context: ./graphhopper
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
-          tags: |
-            ghcr.io/vincent6785/circuit-forgery-graphhopper:latest
-            ghcr.io/vincent6785/circuit-forgery-graphhopper:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Même cache que le build de vérification de ci.yml, exécuté juste avant.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # Attestation de provenance (build, dépôt, commit) et SBOM attachées à l'image.
+          provenance: mode=max
+          sbom: true

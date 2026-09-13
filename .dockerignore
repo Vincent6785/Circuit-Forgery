@@ -21,13 +21,13 @@ backend/data/*.db-wal
 # Python
 __pycache__/
 **/__pycache__/
-*.pyc
-.venv/
+**/*.pyc
+**/.venv/
+**/.pytest_cache/
 *.egg-info/
 
 # Node / frontend build
-node_modules/
-frontend/node_modules/
+**/node_modules/
 frontend/dist/
 
 # Playwright
