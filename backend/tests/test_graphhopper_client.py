@@ -6,6 +6,7 @@ import respx
 
 from app.schemas.route import AvoidZone
 from app.services.graphhopper_client import (
+    UNAVAILABLE_MESSAGE,
     GraphHopperClient,
     GraphHopperRouteNotFoundError,
     GraphHopperUnavailableError,
@@ -179,3 +180,53 @@ async def test_route_alternatives_switches_profile_for_no_speed_limit():
     )
     await _client().route_alternatives([(0, 0), (1, 1)], no_speed_limit=True)
     assert route.calls.last.request.url.params["profile"] == "moto_no_limit"
+
+
+@respx.mock
+async def test_route_maps_non_json_400_to_route_not_found():
+    # Régression : resp.json() levait JSONDecodeError, transformée en 500.
+    respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(400, text="<html>Bad Request</html>"))
+    with pytest.raises(GraphHopperRouteNotFoundError, match="n'a pas pu calculer"):
+        await _client().route([(0, 0), (1, 1)])
+
+
+@respx.mock
+async def test_route_tolerates_malformed_hints():
+    respx.get(f"{BASE_URL}/route").mock(
+        return_value=httpx.Response(400, json={"hints": ["pas un objet"], "message": "Point 0 is out of bounds"})
+    )
+    with pytest.raises(GraphHopperRouteNotFoundError, match="Point 0 is out of bounds"):
+        await _client().route([(0, 0), (1, 1)])
+
+
+@respx.mock
+async def test_route_maps_non_json_200_to_unavailable():
+    respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(200, text="pas du json"))
+    with pytest.raises(GraphHopperUnavailableError):
+        await _client().route([(0, 0), (1, 1)])
+
+
+@respx.mock
+async def test_route_maps_empty_paths_to_route_not_found():
+    respx.get(f"{BASE_URL}/route").mock(return_value=httpx.Response(200, json={"paths": []}))
+    with pytest.raises(GraphHopperRouteNotFoundError):
+        await _client().route([(0, 0), (1, 1)])
+
+
+@respx.mock
+async def test_unavailable_error_does_not_leak_upstream_body():
+    respx.get(f"{BASE_URL}/route").mock(
+        return_value=httpx.Response(500, text="java.lang.NullPointerException at com.graphhopper.Secret")
+    )
+    with pytest.raises(GraphHopperUnavailableError) as exc_info:
+        await _client().route([(0, 0), (1, 1)])
+    assert str(exc_info.value) == UNAVAILABLE_MESSAGE
+
+
+@respx.mock
+async def test_connection_error_does_not_leak_internal_url():
+    respx.get(f"{BASE_URL}/route").mock(side_effect=httpx.ConnectError("connexion refusée"))
+    with pytest.raises(GraphHopperUnavailableError) as exc_info:
+        await _client().route([(0, 0), (1, 1)])
+    assert str(exc_info.value) == UNAVAILABLE_MESSAGE
+    assert "gh-test" not in str(exc_info.value)

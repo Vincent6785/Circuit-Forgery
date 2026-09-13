@@ -1,7 +1,7 @@
 import math
 from typing import Optional
 
-from app.schemas.route import ComputeRouteResponse, Waypoint
+from app.schemas.route import ComputeRouteResponse, WaypointOut
 
 _EARTH_RADIUS_M = 6_371_000
 
@@ -31,6 +31,8 @@ def _leg_boundaries(coordinates: list, snapped_waypoints: list) -> list[int]:
     pour rester correct même sur un trajet qui repasse près d'un point déjà
     visité (boucle, aller-retour).
     """
+    if not coordinates:
+        return []
     boundaries: list[int] = []
     cursor = 0
     for wp in snapped_waypoints:
@@ -41,8 +43,9 @@ def _leg_boundaries(coordinates: list, snapped_waypoints: list) -> list[int]:
 
 
 def _haversine_m(a: list, b: list) -> float:
-    lon1, lat1 = a
-    lon2, lat2 = b
+    # [lon, lat] ou [lon, lat, altitude] : l'altitude éventuelle est ignorée.
+    lon1, lat1 = a[0], a[1]
+    lon2, lat2 = b[0], b[1]
     d_lat = math.radians(lat2 - lat1)
     d_lon = math.radians(lon2 - lon1)
     h = math.sin(d_lat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(
@@ -58,7 +61,15 @@ def _cumulative_distance_m(coordinates: list) -> list[float]:
     return cumulative
 
 
-def path_to_response(path: dict, waypoints: Optional[list[Waypoint]] = None) -> ComputeRouteResponse:
+def path_to_response(
+    path: dict,
+    waypoints: Optional[list[WaypointOut]] = None,
+    leg_boundaries: Optional[list[int]] = None,
+) -> ComputeRouteResponse:
+    """leg_boundaries, s'il est fourni, remplace le calcul depuis
+    snapped_waypoints : c'est le cas du circuit en boucle, dont les waypoints
+    renvoyés sont extraits du tracé lui-même et non ceux demandés à
+    GraphHopper (un seul point de départ)."""
     coordinates = path["points"]["coordinates"]
     num_points = len(coordinates)
     details = path.get("details", {})
@@ -66,8 +77,9 @@ def path_to_response(path: dict, waypoints: Optional[list[Waypoint]] = None) -> 
     max_speed = _expand_detail(details.get("max_speed", []), num_points)
     road_class = _expand_detail(details.get("road_class", []), num_points)
 
-    snapped = path.get("snapped_waypoints", {}).get("coordinates", [])
-    leg_boundaries = _leg_boundaries(coordinates, snapped) if snapped else []
+    if leg_boundaries is None:
+        snapped = path.get("snapped_waypoints", {}).get("coordinates", [])
+        leg_boundaries = _leg_boundaries(coordinates, snapped) if snapped else []
 
     return ComputeRouteResponse(
         distance_m=path["distance"],

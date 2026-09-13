@@ -1,10 +1,15 @@
-import json
-from datetime import datetime
-from typing import Annotated, Optional
+from datetime import datetime, timezone
+from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
-
-from app.core.config import settings
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    NonNegativeFloat,
+    StringConstraints,
+    model_validator,
+)
 
 # Répété dans 4 schémas (compute, round-trip, création, mise à jour) : un
 # type partagé évite qu'un futur ajustement de la plage 20-80 n'oublie l'un
@@ -14,32 +19,72 @@ SpeedLimitKmh = Annotated[Optional[float], Field(default=None, ge=20, le=80)]
 
 # Backend exposé sans authentification sur le LAN (limitation documentée,
 # README) : ces bornes ne sont pas des limites métier mais un garde-fou bon
-# marché contre un client qui remplirait la base avec des champs de
-# plusieurs centaines de Mo. 5 Mo pour une géométrie est très large : même
-# un tracé long (plusieurs centaines de km) tient sur quelques centaines de
-# Ko une fois sérialisé.
-_MAX_GEOMETRY_BYTES = 5_000_000
+# marché contre un client qui remplirait la base avec des champs démesurés.
+# 200 000 points couvrent très largement un long trajet (quelques dizaines de
+# milliers de points pour plusieurs centaines de km) ; la taille du corps de
+# requête est en plus bornée en amont (app/core/body_limit.py).
+MAX_GEOMETRY_POINTS = 200_000
+MAX_LABEL_LENGTH = 200
+
+Label = Annotated[str, StringConstraints(max_length=MAX_LABEL_LENGTH)]
+RouteName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+Latitude = Annotated[float, Field(ge=-90, le=90)]
+Longitude = Annotated[float, Field(ge=-180, le=180)]
 
 
-def _validate_geometry_size(v: dict) -> dict:
-    if len(json.dumps(v)) > _MAX_GEOMETRY_BYTES:
-        raise ValueError(f"geometry_geojson dépasse la taille maximale autorisée ({_MAX_GEOMETRY_BYTES} octets)")
-    return v
+def _assume_utc(value: datetime) -> datetime:
+    # SQLite ne conserve pas le fuseau : un horodatage relu est naïf alors
+    # qu'il a été écrit en UTC. Sans fuseau dans la réponse, un navigateur
+    # l'interprète comme une heure locale (1 à 2 h d'écart en France).
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-class Waypoint(BaseModel):
+UtcDatetime = Annotated[datetime, AfterValidator(_assume_utc)]
+
+
+class RequestModel(BaseModel):
+    """Base des schémas d'entrée : refuse NaN et ±Infinity, que le décodeur
+    JSON accepte. Les comparaisons de bornes étant toutes fausses pour NaN,
+    une valeur NaN passait sinon la validation (rayon de zone à éviter,
+    notamment) et produisait un polygone NaN envoyé à GraphHopper."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+
+class Waypoint(RequestModel):
+    lat: Latitude
+    lon: Longitude
+    label: Optional[Label] = None
+
+
+class WaypointOut(BaseModel):
+    """Waypoint renvoyé par l'API : sans les contraintes d'entrée, pour qu'un
+    trajet enregistré avant leur ajout (libellé plus long, par exemple) reste
+    lisible."""
+
     lat: float
     lon: float
     label: Optional[str] = None
 
 
-class AvoidZone(BaseModel):
-    lat: float
-    lon: float
-    radius_m: float
+class AvoidZone(RequestModel):
+    lat: Latitude
+    lon: Longitude
+    radius_m: float = Field(gt=0)
 
 
-class ComputeRouteRequest(BaseModel):
+class LineStringGeometry(RequestModel):
+    """Géométrie GeoJSON d'un tracé : coordonnées [lon, lat] ou
+    [lon, lat, altitude]. Validée pour qu'un tracé enregistré soit toujours
+    exploitable, à l'export GPX notamment."""
+
+    type: Literal["LineString"]
+    coordinates: list[Annotated[list[float], Field(min_length=2, max_length=3)]] = Field(
+        min_length=2, max_length=MAX_GEOMETRY_POINTS
+    )
+
+
+class ComputeRouteRequest(RequestModel):
     waypoints: list[Waypoint] = Field(min_length=2)
     avoid_zones: list[AvoidZone] = []
     # None = comportement par défaut du profil (80 km/h). Une valeur ne peut
@@ -60,14 +105,14 @@ class ComputeRouteResponse(BaseModel):
     # Seul l'endpoint round-trip renseigne ce champ, puisque c'est lui qui
     # génère les waypoints côté serveur ; un calcul classique le laisse vide,
     # le frontend connaissant déjà les points qu'il a envoyés.
-    waypoints: list[Waypoint] = []
+    waypoints: list[WaypointOut] = []
     # Passe à True côté round-trip quand le tracé brut renvoyé par GraphHopper
     # a dû être sous-échantillonné pour respecter max_waypoints — même logique
     # que GpxImportResponse.truncated côté import GPX.
     simplified: bool = False
 
 
-class RoundTripRequest(BaseModel):
+class RoundTripRequest(RequestModel):
     start: Waypoint
     distance_m: float = Field(gt=0)
     seed: Optional[int] = None
@@ -76,7 +121,7 @@ class RoundTripRequest(BaseModel):
     no_speed_limit: bool = False
 
 
-class AlternativesRequest(BaseModel):
+class AlternativesRequest(RequestModel):
     waypoints: list[Waypoint] = Field(min_length=2, max_length=2)
     # Un seuil personnalisé (custom_model) est incompatible avec alternative_route
     # (cf. ui/route-alternatives.js) : seul le changement de profil "Aucune limite"
@@ -88,88 +133,78 @@ class AlternativesResponse(BaseModel):
     alternatives: list[ComputeRouteResponse]
 
 
-class RouteCreate(BaseModel):
-    name: str = Field(max_length=200)
+class RouteCreate(RequestModel):
+    name: RouteName
     description: Optional[str] = Field(default=None, max_length=2000)
     waypoints: list[Waypoint] = Field(min_length=2)
-    distance_m: float
-    duration_s: float
-    geometry_geojson: dict
-    # Purement informatif : il n'existe aucun sélecteur de profil côté UI,
-    # compute_route s'appuie toujours sur settings.graphhopper_profile.
-    profile: str = settings.graphhopper_profile
+    distance_m: NonNegativeFloat
+    duration_s: NonNegativeFloat
+    geometry_geojson: LineStringGeometry
     avoid_zones: Optional[list[AvoidZone]] = None
     speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: bool = False
 
-    @field_validator("geometry_geojson")
-    @classmethod
-    def _geometry_size(cls, v: dict) -> dict:
-        return _validate_geometry_size(v)
+
+# Champs décrivant le tracé calculé pour un jeu de waypoints : indissociables.
+ROUTE_DATA_FIELDS = frozenset({"waypoints", "distance_m", "duration_s", "geometry_geojson"})
+_NON_NULLABLE_UPDATE_FIELDS = ROUTE_DATA_FIELDS | {"name", "is_favorite", "no_speed_limit"}
 
 
-class RouteUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, max_length=200)
+class RouteUpdate(RequestModel):
+    """Mise à jour partielle : seuls les champs présents dans la requête sont
+    modifiés (model_fields_set). Un champ nullable explicitement mis à null
+    (description, zones, seuil) est effacé ; un champ absent est conservé."""
+
+    name: Optional[RouteName] = None
     description: Optional[str] = Field(default=None, max_length=2000)
     is_favorite: Optional[bool] = None
     # Présent seulement en édition, pour remplacer le tracé d'un trajet déjà
     # sauvegardé. Le recalcul GraphHopper a lieu côté frontend (POST /compute)
     # avant ce PUT — comme RouteCreate, cet endpoint ne reçoit qu'un résultat
     # déjà calculé.
-    waypoints: Optional[list[Waypoint]] = None
-    distance_m: Optional[float] = None
-    duration_s: Optional[float] = None
-    geometry_geojson: Optional[dict] = None
+    waypoints: Optional[list[Waypoint]] = Field(default=None, min_length=2)
+    distance_m: Optional[NonNegativeFloat] = None
+    duration_s: Optional[NonNegativeFloat] = None
+    geometry_geojson: Optional[LineStringGeometry] = None
     avoid_zones: Optional[list[AvoidZone]] = None
     speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: Optional[bool] = None
 
-    @field_validator("waypoints")
-    @classmethod
-    def _min_two_waypoints(cls, v: Optional[list[Waypoint]]) -> Optional[list[Waypoint]]:
-        if v is not None and len(v) < 2:
-            raise ValueError("Un trajet doit contenir au moins 2 points")
-        return v
-
-    @field_validator("geometry_geojson")
-    @classmethod
-    def _geometry_size(cls, v: Optional[dict]) -> Optional[dict]:
-        return v if v is None else _validate_geometry_size(v)
-
     @model_validator(mode="after")
-    def _waypoints_require_matching_route_data(self) -> "RouteUpdate":
-        # distance_m/duration_s/geometry_geojson décrivent le tracé calculé
-        # pour `waypoints` : les accepter indépendamment permettrait à un
-        # nouveau jeu de waypoints d'écraser silencieusement ces champs à
-        # None (ou geometry_geojson à "null"), corrompant le trajet — tout
-        # GET ultérieur échoue alors (RouteOut les déclare non-optionnels).
-        if self.waypoints is not None and (
-            self.distance_m is None or self.duration_s is None or self.geometry_geojson is None
-        ):
+    def _check_partial_update(self) -> "RouteUpdate":
+        provided = self.model_fields_set
+        for field in sorted(_NON_NULLABLE_UPDATE_FIELDS & provided):
+            if getattr(self, field) is None:
+                raise ValueError(f"{field} ne peut pas être null")
+        # waypoints, distance_m, duration_s et geometry_geojson décrivent un
+        # même tracé : en accepter une partie seulement corromprait le trajet
+        # (géométrie ne correspondant plus aux points), ou était silencieusement
+        # ignoré.
+        route_data = ROUTE_DATA_FIELDS & provided
+        if route_data and route_data != ROUTE_DATA_FIELDS:
             raise ValueError(
-                "waypoints doit être fourni avec distance_m, duration_s et geometry_geojson (tracé recalculé)"
+                "waypoints, distance_m, duration_s et geometry_geojson doivent être fournis ensemble (tracé recalculé)"
             )
         return self
 
 
 class RouteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str] = None
-    waypoints: list[Waypoint]
+    waypoints: list[WaypointOut]
     distance_m: float
     duration_s: float
     geometry_geojson: dict
     profile: str
     is_favorite: bool
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    created_at: UtcDatetime
+    updated_at: Optional[UtcDatetime] = None
     avoid_zones: list[AvoidZone] = []
     speed_limit_kmh: Optional[float] = None
     no_speed_limit: bool = False
-
-    class Config:
-        from_attributes = True
 
 
 class GeocodeResult(BaseModel):
@@ -178,22 +213,26 @@ class GeocodeResult(BaseModel):
     lon: float
 
 
-class PointOfInterestCreate(BaseModel):
-    name: str = Field(max_length=200)
-    lat: float
-    lon: float
+class PointOfInterestCreate(RequestModel):
+    name: RouteName
+    lat: Latitude
+    lon: Longitude
     category: Optional[str] = Field(default=None, max_length=100)
     notes: Optional[str] = Field(default=None, max_length=2000)
 
 
-class PointOfInterestOut(PointOfInterestCreate):
-    id: int
-    created_at: datetime
+class PointOfInterestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    id: int
+    name: str
+    lat: float
+    lon: float
+    category: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: UtcDatetime
 
 
 class GpxImportResponse(BaseModel):
-    waypoints: list[Waypoint]
+    waypoints: list[WaypointOut]
     truncated: bool = False

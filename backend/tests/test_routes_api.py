@@ -1,3 +1,4 @@
+from app.core.config import settings
 from app.routers import routes as routes_module
 
 GPX_LONDON_PARIS = b"""<?xml version="1.0"?>
@@ -23,7 +24,7 @@ def _route_payload(waypoints):
         "waypoints": waypoints,
         "distance_m": 10,
         "duration_s": 1,
-        "geometry_geojson": {"type": "LineString", "coordinates": []},
+        "geometry_geojson": {"type": "LineString", "coordinates": [[2.35, 48.85], [2.36, 48.86]]},
     }
 
 
@@ -88,7 +89,7 @@ def test_round_trip_returns_sampled_waypoints(client, monkeypatch):
 
 
 def test_round_trip_marks_simplified_when_dense_track_is_subsampled(client, monkeypatch):
-    dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(500)]
+    dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(settings.max_waypoints * 5)]
 
     async def fake_round_trip(
         start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
@@ -102,10 +103,10 @@ def test_round_trip_marks_simplified_when_dense_track_is_subsampled(client, monk
     )
     data = resp.json()
     assert data["simplified"] is True
-    # Un emplacement reste volontairement libre sous settings.max_waypoints
-    # (20), pour qu'une mutation ultérieure (ajouter un point, par exemple)
-    # ne heurte pas aussitôt cette même limite sur /compute.
-    assert len(data["waypoints"]) <= 19
+    # Un emplacement reste volontairement libre sous settings.max_waypoints,
+    # pour qu'une mutation ultérieure (ajouter un point, par exemple) ne
+    # heurte pas aussitôt cette même limite sur /compute.
+    assert len(data["waypoints"]) <= settings.max_waypoints - 1
 
 
 def test_round_trip_not_simplified_for_short_track(client, monkeypatch):
@@ -126,7 +127,7 @@ def test_round_trip_reserves_headroom_under_max_waypoints(client, monkeypatch):
     # Vérifie le contrat de bout en bout : un tracé dense généré laisse bien
     # la marge annoncée ci-dessus, et ajouter un point après coup passe le
     # recalcul automatique sur /compute sans re-déclencher la même erreur.
-    dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(500)]
+    dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(settings.max_waypoints * 5)]
 
     async def fake_round_trip(
         start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
@@ -144,7 +145,7 @@ def test_round_trip_reserves_headroom_under_max_waypoints(client, monkeypatch):
     )
     data = resp.json()
     waypoints = data["waypoints"]
-    assert len(waypoints) < 20  # settings.max_waypoints, avec la marge réservée à la génération
+    assert len(waypoints) < settings.max_waypoints  # marge réservée à la génération
 
     follow_up = client.post(
         "/api/routes/compute",
@@ -356,3 +357,81 @@ def test_update_route_replaces_speed_limit_settings(client):
     body = resp.json()
     assert body["no_speed_limit"] is True
     assert body["speed_limit_kmh"] is None
+
+
+def test_round_trip_leg_boundaries_match_returned_waypoints(client, monkeypatch):
+    # Régression : les bornes venaient de snapped_waypoints (le seul point de
+    # départ demandé) et ne correspondaient pas aux waypoints renvoyés.
+    dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(settings.max_waypoints * 5)]
+
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
+        path = _fake_path(distance=20000.0, coords=dense_coords)
+        path["snapped_waypoints"] = {"coordinates": [dense_coords[0]]}
+        return path
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
+
+    data = client.post(
+        "/api/routes/round-trip", json={"start": {"lat": 48.85, "lon": 2.35}, "distance_m": 20000}
+    ).json()
+    boundaries = data["leg_boundaries"]
+    assert len(boundaries) == len(data["waypoints"])
+    assert boundaries[0] == 0
+    assert boundaries[-1] == len(dense_coords) - 1
+    for index, waypoint in zip(boundaries, data["waypoints"]):
+        assert dense_coords[index] == [waypoint["lon"], waypoint["lat"]]
+
+
+def test_round_trip_accepts_coordinates_with_elevation(client, monkeypatch):
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
+        return _fake_path(coords=[[2.35, 48.85, 30.0], [2.36, 48.86, 31.0], [2.35, 48.85, 30.0]])
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
+    resp = client.post("/api/routes/round-trip", json={"start": {"lat": 48.85, "lon": 2.35}, "distance_m": 5000})
+    assert resp.status_code == 200
+    assert resp.json()["waypoints"][1] == {"lat": 48.86, "lon": 2.36, "label": None}
+
+
+def test_round_trip_rejects_degenerate_path(client, monkeypatch):
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
+        return _fake_path(coords=[[2.35, 48.85]])
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
+    resp = client.post("/api/routes/round-trip", json={"start": {"lat": 48.85, "lon": 2.35}, "distance_m": 5000})
+    assert resp.status_code == 422
+
+
+def test_compute_route_maps_graphhopper_errors(client, monkeypatch):
+    from app.services.graphhopper_client import (
+        UNAVAILABLE_MESSAGE,
+        GraphHopperRouteNotFoundError,
+        GraphHopperUnavailableError,
+    )
+
+    body = {"waypoints": [{"lat": 48.85, "lon": 2.35}, {"lat": 48.86, "lon": 2.36}]}
+
+    async def not_found(*args, **kwargs):
+        raise GraphHopperRouteNotFoundError("Aucun itinéraire")
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route", not_found)
+    resp = client.post("/api/routes/compute", json=body)
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Aucun itinéraire"
+
+    async def unavailable(*args, **kwargs):
+        raise GraphHopperUnavailableError(UNAVAILABLE_MESSAGE)
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route", unavailable)
+    resp = client.post("/api/routes/compute", json=body)
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == UNAVAILABLE_MESSAGE
+
+
+def test_get_missing_route_returns_404(client):
+    assert client.get("/api/routes/999999").status_code == 404

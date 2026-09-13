@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 import httpx
@@ -6,9 +7,12 @@ from app.core.config import settings
 from app.schemas.route import AvoidZone
 from app.services.avoid_zone import build_custom_model
 
+logger = logging.getLogger(__name__)
+
 
 class GraphHopperUnavailableError(RuntimeError):
-    """Panne côté GraphHopper : injoignable, timeout, ou statut 5xx."""
+    """Panne côté GraphHopper : injoignable, timeout, statut inattendu ou
+    réponse illisible."""
 
 
 class GraphHopperRouteNotFoundError(RuntimeError):
@@ -16,6 +20,13 @@ class GraphHopperRouteNotFoundError(RuntimeError):
     côté entrée utilisateur : point hors réseau routier, aucune connexion
     possible en évitant les axes rapides, etc."""
 
+
+# Message renvoyé au client en cas de panne : le détail (URL interne, corps
+# de réponse, trace Java) n'est écrit que dans les journaux.
+UNAVAILABLE_MESSAGE = "Le moteur de routage est indisponible pour le moment."
+_DEFAULT_NOT_FOUND_MESSAGE = "GraphHopper n'a pas pu calculer cet itinéraire."
+_MAX_UPSTREAM_MESSAGE_LENGTH = 300
+_MAX_LOGGED_BODY_LENGTH = 500
 
 _FRIENDLY_MESSAGES = {
     "com.graphhopper.util.exceptions.PointNotFoundException": (
@@ -28,12 +39,18 @@ _FRIENDLY_MESSAGES = {
 }
 
 
-def _friendly_message(data: dict) -> str:
-    hints = data.get("hints") or []
-    details = hints[0].get("details") if hints else None
+def _friendly_message(data: object) -> str:
+    if not isinstance(data, dict):
+        return _DEFAULT_NOT_FOUND_MESSAGE
+    hints = data.get("hints")
+    first_hint = hints[0] if isinstance(hints, list) and hints else None
+    details = first_hint.get("details") if isinstance(first_hint, dict) else None
     if details in _FRIENDLY_MESSAGES:
         return _FRIENDLY_MESSAGES[details]
-    return data.get("message") or "GraphHopper n'a pas pu calculer cet itinéraire."
+    message = data.get("message")
+    if isinstance(message, str) and message.strip():
+        return message[:_MAX_UPSTREAM_MESSAGE_LENGTH]
+    return _DEFAULT_NOT_FOUND_MESSAGE
 
 
 def _resolve_profile(profile: Optional[str], no_speed_limit: bool) -> str:
@@ -54,18 +71,37 @@ def _tightened_speed_limit(speed_limit_kmh: Optional[float], no_speed_limit: boo
     return speed_limit_kmh
 
 
+def _json_or_none(resp: httpx.Response) -> object:
+    try:
+        return resp.json()
+    except ValueError:
+        return None
+
+
+def _unreachable(exc: httpx.HTTPError) -> GraphHopperUnavailableError:
+    logger.warning("GraphHopper injoignable : %r", exc)
+    return GraphHopperUnavailableError(UNAVAILABLE_MESSAGE)
+
+
 def _extract_paths(resp: httpx.Response) -> list[dict]:
     # Un 400 GraphHopper signale un point sans route à proximité ou l'absence
     # de connexion entre deux points — une erreur d'entrée utilisateur, pas
     # une panne : GraphHopper a bien répondu.
     if resp.status_code == 400:
-        raise GraphHopperRouteNotFoundError(_friendly_message(resp.json()))
+        raise GraphHopperRouteNotFoundError(_friendly_message(_json_or_none(resp)))
     if resp.status_code != 200:
-        raise GraphHopperUnavailableError(f"GraphHopper a retourné {resp.status_code}: {resp.text}")
-    data = resp.json()
-    if not data.get("paths"):
+        logger.warning(
+            "GraphHopper a répondu %s : %s", resp.status_code, resp.text[:_MAX_LOGGED_BODY_LENGTH]
+        )
+        raise GraphHopperUnavailableError(UNAVAILABLE_MESSAGE)
+    data = _json_or_none(resp)
+    if not isinstance(data, dict):
+        logger.warning("Réponse GraphHopper illisible : %s", resp.text[:_MAX_LOGGED_BODY_LENGTH])
+        raise GraphHopperUnavailableError(UNAVAILABLE_MESSAGE)
+    paths = data.get("paths")
+    if not paths:
         raise GraphHopperRouteNotFoundError("Aucun itinéraire trouvé pour ces points")
-    return data["paths"]
+    return paths
 
 
 class GraphHopperClient:
@@ -139,7 +175,7 @@ class GraphHopperClient:
                     }
                     resp = await client.get(f"{self._base_url}/route", params=params)
             except httpx.HTTPError as exc:
-                raise GraphHopperUnavailableError(f"GraphHopper injoignable: {exc}") from exc
+                raise _unreachable(exc) from exc
 
         return _extract_paths(resp)[0]
 
@@ -186,7 +222,7 @@ class GraphHopperClient:
                     params = {**base, "point": f"{lat},{lon}", "points_encoded": "false", "ch.disable": "true"}
                     resp = await client.get(f"{self._base_url}/route", params=params)
             except httpx.HTTPError as exc:
-                raise GraphHopperUnavailableError(f"GraphHopper injoignable: {exc}") from exc
+                raise _unreachable(exc) from exc
 
         return _extract_paths(resp)[0]
 
@@ -214,7 +250,7 @@ class GraphHopperClient:
             try:
                 resp = await client.get(f"{self._base_url}/route", params=params)
             except httpx.HTTPError as exc:
-                raise GraphHopperUnavailableError(f"GraphHopper injoignable: {exc}") from exc
+                raise _unreachable(exc) from exc
 
         return _extract_paths(resp)
 
