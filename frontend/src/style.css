@@ -705,7 +705,13 @@ button.confirm-pending {
   }
 
   #app.sidebar-collapsed .sidebar-scroll,
-  #app.sidebar-collapsed .sidebar-footer {
+  #app.sidebar-collapsed #route-info {
+    display: none;
+  }
+
+  /* Replié, le pied ne garde que ce qui ne doit pas passer inaperçu : message
+     d'erreur ou d'information et calcul en cours. */
+  #app.sidebar-collapsed .sidebar-footer:not(:has(> #route-error:not(.hidden), > #route-busy:not(.hidden))) {
     display: none;
   }
 

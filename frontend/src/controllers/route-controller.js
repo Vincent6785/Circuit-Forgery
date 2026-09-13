@@ -11,6 +11,8 @@ import { exportRouteGpx } from "../api/gpx.js";
 import { downloadBlob } from "../ui/download.js";
 import { gpxFileName } from "../utils/filename.js";
 
+const ROUTE_ACTION_BUTTON_IDS = ["save-route-btn", "update-route-btn", "export-gpx-btn"];
+
 /**
  * Câble la sidebar "Trajet" : calcul et rendu du tracé courant, sauvegarde,
  * édition d'un trajet existant, effacement. Reçoit le store et les objets
@@ -47,6 +49,11 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         routeRequest.run((signal) => computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit, { signal }))
       );
     } catch (err) {
+      // Le tracé affiché décrivait les points précédents : le garder laissait
+      // sauvegarder, exporter ou restaurer (brouillon) les nouveaux points
+      // avec l'ancienne géométrie et l'ancienne distance.
+      routeLayer.clear();
+      store.setState({ computedRoute: null });
       showRouteError(err.message);
       return;
     }
@@ -96,6 +103,25 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     document.getElementById("close-loop-btn").disabled = wp.length < 2 || alreadyClosed;
     document.getElementById("reverse-route-btn").disabled = wp.length < 2;
   }, { keys: ["waypoints", "computedRoute"] });
+
+  // Sans tracé calculé (calcul en échec), rien à sauvegarder ni à exporter :
+  // la distance affichée ne correspondrait plus aux points.
+  store.subscribe(
+    (state) => {
+      const missing = !state.computedRoute;
+      for (const id of ROUTE_ACTION_BUTTON_IDS) document.getElementById(id).disabled = missing;
+      if (missing) {
+        document.getElementById("route-distance").textContent = "—";
+        document.getElementById("route-duration").textContent = "";
+      }
+    },
+    { keys: ["computedRoute"] }
+  );
+
+  /** Réactive un bouton d'action après sa requête, sauf si le tracé a disparu entre-temps. */
+  function releaseActionButton(btn) {
+    btn.disabled = !store.getState().computedRoute;
+  }
 
   document.getElementById("undo-waypoint-btn").addEventListener("click", () => waypointManager.undo());
   document.getElementById("redo-waypoint-btn").addEventListener("click", () => waypointManager.redo());
@@ -179,7 +205,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     } catch (err) {
       showRouteError(err.message);
     } finally {
-      btn.disabled = false;
+      releaseActionButton(btn);
     }
   });
 
@@ -204,7 +230,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     } catch (err) {
       showRouteError(err.message);
     } finally {
-      btn.disabled = false;
+      releaseActionButton(btn);
     }
   });
 
@@ -243,7 +269,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         showRouteError(err.message);
       }
     } finally {
-      btn.disabled = false;
+      releaseActionButton(btn);
     }
   });
 
@@ -270,6 +296,10 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
    * editingRouteId et le pré-remplissage du nom. Un champ d'état oublié ici
    * resterait sinon invisible dans les deux autres cas. */
   function applyLoadedRoute(route, { editingRouteId, prefillName = false } = {}) {
+    // Un calcul encore en cours décrit les points remplacés ici : sans cette
+    // annulation, son résultat arrivait après et devenait le tracé courant du
+    // trajet ouvert — sauvegardé avec lui par "Enregistrer les modifications".
+    routeRequest.cancel();
     // Ouvert depuis "Mes trajets" : on bascule là où ses points s'éditent.
     switchTab("route");
     // Le brouillon en cours est remplacé par ce trajet : sans ça, un

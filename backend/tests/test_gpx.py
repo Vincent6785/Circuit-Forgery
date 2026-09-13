@@ -122,6 +122,17 @@ def test_build_gpx_strips_illegal_xml_control_characters():
     assert len(parsed_waypoints) == 2
 
 
+def test_build_gpx_strips_xml_noncharacters():
+    # U+FFFE/U+FFFF passent la validation JSON mais sont illégaux en XML 1.0 :
+    # l'export produisait un GPX que l'import de l'app refusait.
+    waypoints = [Waypoint(lat=1.0, lon=1.0, label="A\uffffB"), Waypoint(lat=2.0, lon=2.0, label="C\ufffe")]
+    xml = build_gpx("Trajet\uffff", waypoints, {"coordinates": []})
+    assert "\uffff" not in xml
+    assert "\ufffe" not in xml
+    parsed_waypoints, _ = parse_gpx(xml.encode("utf-8"), max_waypoints=20)
+    assert [wp.label for wp in parsed_waypoints] == ["AB", "C"]
+
+
 def _rte_gpx(points, ns="http://www.topografix.com/GPX/1/1") -> bytes:
     body = "".join(
         f'<rtept lat="{lat}" lon="{lon}"><name>{name}</name></rtept>' for lat, lon, name in points

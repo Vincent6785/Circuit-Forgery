@@ -67,6 +67,12 @@ publie les images Docker correspondantes.
   formulaire de point d'intérêt perdue en cas d'échec, libellés de listes et
   alternatives inaccessibles au clavier, message d'information annoncé comme
   une alerte.
+- Trajet sauvegardé ouvert pendant un calcul enregistré avec le tracé d'un
+  autre trajet ; ancien tracé conservé (sauvegardé, exporté) après un calcul
+  en échec ; GPX exporté non ré-importable (caractères U+FFFE/U+FFFF).
+- Mobile : erreur et calcul en cours invisibles panneau replié ; second doigt
+  créant une seconde zone à éviter, tracé poursuivi après sortie du mode
+  dessin.
 
 ### Sécurité
 

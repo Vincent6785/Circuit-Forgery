@@ -158,6 +158,35 @@ test("sur mobile, replier le panneau agrandit la carte", async ({ page }) => {
   await expect(page.locator("#round-trip-panel")).toBeVisible();
 });
 
+test("sur mobile, une erreur de calcul reste visible panneau replié", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setupParisView(page, undefined, 12);
+  await page.locator("#sidebar-toggle").click();
+  await expect(page.locator(".sidebar-footer")).toBeHidden();
+
+  await page.route("**/api/routes/compute", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Le moteur de routage est indisponible pour le moment." }),
+    })
+  );
+  await clickMapAt(page, A.lat, A.lon);
+  await clickMapAt(page, B.lat, B.lon);
+
+  await expect(page.locator("#route-error")).toBeVisible();
+  await expect(page.locator("#route-info")).toBeHidden();
+  await expect(page.locator(".sidebar-scroll")).toBeHidden();
+  // La carte a rétréci sous le message : Leaflet doit en tenir compte.
+  await expect
+    .poll(async () => {
+      const box = await page.locator("#map").boundingBox();
+      const size = await page.evaluate(() => window.__map.getSize().y);
+      return Math.abs(size - box.height) <= 1;
+    })
+    .toBe(true);
+});
+
 test("sur grand écran, le bouton de repli du panneau n'apparaît pas", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#sidebar-toggle")).toBeHidden();

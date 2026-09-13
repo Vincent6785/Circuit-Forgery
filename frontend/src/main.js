@@ -66,6 +66,7 @@ if (import.meta.env.DEV || import.meta.env.VITE_E2E_HOOKS === "true") {
   window.__map = map;
   window.__getWaypoints = () => waypointManager.getPoints();
   window.__getAvoidZones = () => store.getState().avoidZones;
+  window.__getComputedRoute = () => store.getState().computedRoute;
   window.__getSpeedLimit = () => ({
     speedLimitKmh: store.getState().speedLimitKmh,
     noSpeedLimit: store.getState().noSpeedLimit,
