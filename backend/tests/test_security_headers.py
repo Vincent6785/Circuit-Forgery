@@ -23,7 +23,9 @@ def test_content_security_policy_restricts_scripts_and_allows_tiles():
     csp = build_content_security_policy("https://tile.openstreetmap.org/{z}/{x}/{y}.png")
     directives = dict(part.split(" ", 1) for part in csp.split("; "))
     assert directives["script-src"] == "'self'"
-    assert "https://tile.openstreetmap.org" in directives["img-src"]
+    # Comparaison de sources entières, pas de sous-chaînes : "https://tile.openstreetmap.org.evil"
+    # ne doit pas passer pour l'origine attendue.
+    assert "https://tile.openstreetmap.org" in directives["img-src"].split()
     assert directives["object-src"] == "'none'"
     assert directives["frame-ancestors"] == "'none'"
     assert "'unsafe-eval'" not in csp
@@ -34,7 +36,8 @@ def test_application_responses_carry_security_headers(client):
     assert resp.headers["x-content-type-options"] == "nosniff"
     assert resp.headers["referrer-policy"] == "strict-origin-when-cross-origin"
     assert resp.headers["x-frame-options"] == "DENY"
-    assert tile_origin(settings.tile_url) in resp.headers["content-security-policy"]
+    directives = dict(part.split(" ", 1) for part in resp.headers["content-security-policy"].split("; "))
+    assert tile_origin(settings.tile_url) in directives["img-src"].split()
 
 
 def test_error_responses_carry_security_headers_too(client):
