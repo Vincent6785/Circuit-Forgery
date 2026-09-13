@@ -1,0 +1,18 @@
+# Override pour exécuter la suite Playwright contre la stack locale : le
+# frontend est construit avec les accès internes utilisés par les tests
+# (window.__map…), absents des images de production.
+#
+# Usage :
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+#   cd frontend && npm run test:e2e
+#
+# Retour à l'image de production ensuite :
+#   docker compose up -d --build
+services:
+  backend:
+    # Nom distinct : sans lui, l'image de test remplaçait l'image par défaut, et
+    # un simple `docker compose up -d` redémarrait ensuite la version de test.
+    image: circuit-forgery-backend:e2e
+    build:
+      args:
+        VITE_E2E_HOOKS: "true"

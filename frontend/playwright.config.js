@@ -4,6 +4,8 @@ import { defineConfig, devices } from "@playwright/test";
 // avant de lancer les tests — voir README.md, section "Tests".
 export default defineConfig({
   testDir: "./tests/e2e",
+  // Supprime les données de test laissées par un run précédent interrompu.
+  globalSetup: "./tests/e2e/global-setup.js",
   fullyParallel: false, // les tests partagent la même base SQLite backend
   retries: 0,
   use: {

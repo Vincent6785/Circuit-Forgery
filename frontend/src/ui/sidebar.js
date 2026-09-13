@@ -11,10 +11,13 @@ export function hideRouteInfo() {
 
 /** Bandeau générique (erreur ou information) qui réutilise le même
  * emplacement inline, à la place des popups navigateur bloquantes
- * (alert/confirm) pour les messages non critiques. */
+ * (alert/confirm) pour les messages non critiques. Une erreur est annoncée
+ * immédiatement par les lecteurs d'écran (role="alert") ; une information,
+ * sans interrompre (role="status"). */
 export function showBanner(message, { type = "error" } = {}) {
   const el = document.getElementById("route-error");
   el.textContent = message;
+  el.setAttribute("role", type === "error" ? "alert" : "status");
   el.classList.remove("hidden", "error", "info");
   el.classList.add(type);
 }
@@ -31,8 +34,11 @@ export function hideRouteError() {
   hideBanner();
 }
 
+/** Arrondi à la minute avant de séparer heures et minutes : arrondir après
+ * le modulo affichait "1 h 60 min" pour 1 h 59 min 45 s. */
 export function formatDuration(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
+  const totalMinutes = Math.round(Math.max(0, seconds) / 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
   return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }

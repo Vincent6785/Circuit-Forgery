@@ -84,3 +84,19 @@ test("import GPX invalide : message d'erreur inline, pas de popup navigateur", a
   await expect(page.locator("#waypoint-list li")).toHaveCount(0);
   expect(dialogFired).toBe(false);
 });
+
+test("import GPX : un seul calcul d'itinéraire", async ({ page }) => {
+  // Régression : l'import déclenchait le calcul via le store puis en relançait un second identique.
+  let computeCount = 0;
+  page.on("request", (req) => {
+    if (req.url().includes("/api/routes/compute")) computeCount++;
+  });
+
+  await page.goto("/");
+  await expect(page.locator("#map")).toBeVisible();
+  await page.locator("#gpx-import-input").setInputFiles(FIXTURE_PATH);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
+  await page.waitForTimeout(1000);
+
+  expect(computeCount).toBe(1);
+});

@@ -1,31 +1,13 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, openRouteOptions, openTab } from "./helpers.js";
+import { clickMapAt, dragZone, mapPointAt, openRouteOptions, openTab, setupParisView } from "./helpers.js";
 
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
-  await page.waitForTimeout(300);
+async function setupView(page) {
+  await setupParisView(page);
   await openRouteOptions(page);
 }
 
-async function dragZone(page, centerLat, centerLon, edgeLat, edgeLon) {
-  const [centerPoint, edgePoint] = await page.evaluate(
-    ([c, e]) => [window.__map.latLngToContainerPoint(c), window.__map.latLngToContainerPoint(e)],
-    [
-      [centerLat, centerLon],
-      [edgeLat, edgeLon],
-    ]
-  );
-  const box = await page.locator("#map").boundingBox();
-  await page.mouse.move(box.x + centerPoint.x, box.y + centerPoint.y);
-  await page.mouse.down();
-  await page.mouse.move(box.x + edgePoint.x, box.y + edgePoint.y, { steps: 5 });
-  await page.mouse.up();
-}
-
 test("dessiner une zone à éviter n'ajoute pas de waypoint parasite", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   const before = await page.evaluate(() => window.__getWaypoints().length);
@@ -39,7 +21,7 @@ test("dessiner une zone à éviter n'ajoute pas de waypoint parasite", async ({ 
 });
 
 test("dessiner une zone à éviter change le tracé calculé", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
@@ -61,7 +43,7 @@ test("dessiner une zone à éviter change le tracé calculé", async ({ page }) 
 });
 
 test("retirer une zone recalcule sans elle", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -82,7 +64,7 @@ test("retirer une zone recalcule sans elle", async ({ page }) => {
 });
 
 test("une zone à éviter survit à la sauvegarde et au rechargement d'un trajet", async ({ page, request }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -115,7 +97,7 @@ test("une zone à éviter survit à la sauvegarde et au rechargement d'un trajet
 });
 
 test("un clic simple avec un rayon saisi crée une zone de ce rayon exact", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -135,7 +117,7 @@ test("un clic simple avec un rayon saisi crée une zone de ce rayon exact", asyn
 });
 
 test("un clic simple sans rayon saisi n'ajoute aucune zone", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -149,7 +131,7 @@ test("un clic simple sans rayon saisi n'ajoute aucune zone", async ({ page }) =>
 });
 
 test("le filtre anti->80km/h reste actif avec une zone à éviter active", async ({ page, request }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -170,4 +152,75 @@ test("le filtre anti->80km/h reste actif avec une zone à éviter active", async
   for (const speed of speeds) {
     expect(speed).toBeLessThanOrEqual(80);
   }
+});
+
+/** Envoie un événement pointeur tactile à la position écran donnée : Playwright
+ * ne simule pas deux doigts posés en même temps. */
+async function dispatchTouch(page, type, pointerId, { x, y }) {
+  await page.evaluate(
+    ([type, pointerId, x, y]) => {
+      const target = document.elementFromPoint(x, y) ?? document;
+      const init = { pointerId, pointerType: "touch", isPrimary: pointerId === 11, clientX: x, clientY: y };
+      target.dispatchEvent(new PointerEvent(type, { ...init, button: 0, bubbles: true, cancelable: true }));
+    },
+    [type, pointerId, x, y]
+  );
+}
+
+/** Nombre de formes dessinées sur la carte (zones et cercle fantôme de dessin). */
+const overlayShapeCount = (page) => page.locator("#map .leaflet-overlay-pane path").count();
+
+test("un second doigt posé pendant le dessin ne crée ni seconde zone ni cercle résiduel", async ({ page }) => {
+  await setupView(page);
+  await page.locator("#avoid-zone-toggle-btn").click();
+  // Positions écran calculées d'avance : un geste à deux doigts peut zoomer la carte.
+  const first = { down: await mapPointAt(page, 48.865, 2.325), up: await mapPointAt(page, 48.868, 2.328) };
+  const second = { down: await mapPointAt(page, 48.86, 2.31), up: await mapPointAt(page, 48.863, 2.313) };
+
+  await dispatchTouch(page, "pointerdown", 11, first.down);
+  await dispatchTouch(page, "pointerdown", 12, second.down);
+  await dispatchTouch(page, "pointermove", 11, first.up);
+  await dispatchTouch(page, "pointermove", 12, second.up);
+  await dispatchTouch(page, "pointerup", 11, first.up);
+  await dispatchTouch(page, "pointerup", 12, second.up);
+
+  await expect.poll(() => page.evaluate(() => window.__getAvoidZones().length)).toBe(1);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.__getAvoidZones().length)).toBe(1);
+  expect(await overlayShapeCount(page)).toBe(1);
+  expect(await page.evaluate(() => window.__map.dragging.enabled())).toBe(true);
+});
+
+test("quitter le mode dessin pendant un tracé l'annule sans ajouter de zone", async ({ page }) => {
+  await setupView(page);
+  await page.locator("#avoid-zone-toggle-btn").click();
+  const down = await mapPointAt(page, 48.865, 2.325);
+  const up = await mapPointAt(page, 48.868, 2.328);
+
+  await dispatchTouch(page, "pointerdown", 11, down);
+  await dispatchTouch(page, "pointermove", 11, up);
+  await openTab(page, "saved");
+  await dispatchTouch(page, "pointerup", 11, up);
+
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.__getAvoidZones())).toHaveLength(0);
+  expect(await overlayShapeCount(page)).toBe(0);
+  expect(await page.evaluate(() => window.__map.dragging.enabled())).toBe(true);
+});
+
+test("relâcher le dessin d'une zone hors de la carte annule sans bloquer la carte", async ({ page }) => {
+  // Régression : le relâchement n'était écouté que sur la carte ; hors de la
+  // carte, le déplacement restait désactivé et le cercle fantôme affiché.
+  await setupView(page);
+  await page.locator("#avoid-zone-toggle-btn").click();
+
+  const center = await mapPointAt(page, 48.865, 2.325);
+  const sidebar = await page.locator("#sidebar").boundingBox();
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(sidebar.x + sidebar.width / 2, sidebar.y + sidebar.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  expect(await page.evaluate(() => window.__getAvoidZones())).toHaveLength(0);
+  expect(await page.evaluate(() => window.__map.dragging.enabled())).toBe(true);
 });

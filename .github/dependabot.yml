@@ -1,0 +1,42 @@
+# Mises à jour de dépendances proposées chaque semaine, en PR vers dev (flux
+# habituel dev → main). Les dépendances Python de production sont figées avec
+# leurs hashes dans backend/requirements.lock : une PR qui modifie
+# requirements.txt doit régénérer ce fichier (la CI vérifie qu'il est à jour).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    target-branch: dev
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: dev
+    schedule:
+      interval: weekly
+    groups:
+      npm-production:
+        dependency-type: production
+      npm-development:
+        dependency-type: development
+
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /graphhopper
+    target-branch: dev
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

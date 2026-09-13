@@ -1,8 +1,12 @@
+from typing import Literal
+
 from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CF_")
+
     graphhopper_url: str = "http://graphhopper:8989"
     graphhopper_profile: str = "moto_no_fast"
     # Profil sans exclusion de vitesse (graphhopper/custom_models/moto_no_limit.json),
@@ -21,7 +25,7 @@ class Settings(BaseSettings):
     # >= 2 : le reste du code (génération de circuit en boucle notamment,
     # cf. routers/routes.py) suppose toujours au moins un point de départ et
     # d'arrivée distincts.
-    max_waypoints: int = Field(default=20, ge=2)
+    max_waypoints: int = Field(default=100, ge=2)
     max_gpx_upload_bytes: int = Field(default=5_000_000, gt=0)
     max_avoid_zone_radius_m: float = Field(default=20_000, gt=0)
     # Pas de plafond équivalent avant ce correctif, contrairement à
@@ -30,6 +34,11 @@ class Settings(BaseSettings):
     # limite ni côté client ni côté serveur.
     max_avoid_zones: int = Field(default=20, ge=1)
     max_round_trip_distance_m: float = Field(default=500_000, gt=0)
+    # Taille maximale d'un corps de requête, vérifiée avant sa lecture
+    # complète (app/core/body_limit.py). 10 Mo couvrent largement la
+    # géométrie d'un long trajet sauvegardé ; l'import GPX a sa propre borne,
+    # max_gpx_upload_bytes.
+    max_request_body_bytes: int = Field(default=10_000_000, gt=0)
 
     nominatim_url: str = "https://nominatim.openstreetmap.org"
     # Ces deux réglages découlent de la politique d'usage de Nominatim :
@@ -37,8 +46,13 @@ class Settings(BaseSettings):
     nominatim_user_agent: str = "circuit-forgery/0.1 (usage local non commercial)"
     nominatim_min_interval_s: float = Field(default=1.1, ge=0)
 
-    class Config:
-        env_prefix = "CF_"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    # Fond de carte affiché par le frontend (exposé via /api/config) et
+    # autorisé en conséquence par la Content-Security-Policy. Sans sous-domaine
+    # {s}, déconseillé par la politique d'usage des tuiles OpenStreetMap.
+    tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    tile_attribution: str = "&copy; OpenStreetMap contributors"
 
     @model_validator(mode="after")
     def _check_bounding_box(self) -> "Settings":

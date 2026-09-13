@@ -7,9 +7,15 @@ import { roleForIndex } from "../map/waypoint-role.js";
 // fermer l'édition ne doit pas déclencher de recalcul.
 let _editingId = null;
 let _lastArgs = null;
+// Point dont l'édition vient d'être ouverte : son champ nom reçoit le focus.
+let _focusEditOf = null;
+
+// Type de données propre au glisser-déposer de la liste : un texte déposé
+// depuis l'extérieur (text/plain) ne doit pas être interprété comme un index.
+const DRAG_TYPE = "application/x-circuit-forgery-waypoint-index";
 
 function _rerender() {
-  if (_lastArgs) renderWaypointList(..._lastArgs);
+  if (_lastArgs) _renderList(..._lastArgs);
 }
 
 function _legDistanceM(idx, computedRoute) {
@@ -30,7 +36,24 @@ function _legDistanceM(idx, computedRoute) {
  * pour afficher la distance depuis l'étape précédente.
  */
 export function renderWaypointList(waypoints, waypointManager, computedRoute) {
+  const sameWaypoints = _lastArgs !== null && _lastArgs[0] === waypoints;
   _lastArgs = [waypoints, waypointManager, computedRoute];
+
+  if (_editingId !== null) {
+    if (!waypoints.some((wp) => wp.id === _editingId)) {
+      _editingId = null; // point édité supprimé entre-temps (annuler, clic droit…)
+    } else if (sameWaypoints) {
+      // Seul le tracé a changé (un calcul qui se termine) : reconstruire la
+      // liste ferait perdre la saisie et le focus du formulaire en cours. Le
+      // rendu reprendra à la validation ou à l'annulation, avec les
+      // derniers arguments reçus.
+      return;
+    }
+  }
+  _renderList(waypoints, waypointManager, computedRoute);
+}
+
+function _renderList(waypoints, waypointManager, computedRoute) {
   const container = document.getElementById("waypoint-list");
   container.innerHTML = "";
 
@@ -51,9 +74,16 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
     li.appendChild(dot);
 
     if (_editingId === wp.id) {
-      li.appendChild(_editForm(wp, waypointManager));
+      const form = _editForm(wp, waypointManager);
+      li.appendChild(form);
+      if (_focusEditOf === wp.id) {
+        _focusEditOf = null;
+        queueMicrotask(() => form.querySelector("input")?.focus());
+      }
     } else {
-      const text = document.createElement("span");
+      // Un vrai bouton, atteignable au clavier (un <span> cliquable ne l'était pas).
+      const text = document.createElement("button");
+      text.type = "button";
       text.className = "waypoint-label";
       const legDistance = _legDistanceM(idx, computedRoute);
       const distanceSuffix = legDistance != null ? ` (+${(legDistance / 1000).toFixed(1)} km)` : "";
@@ -61,6 +91,7 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
       text.title = "Cliquer pour modifier le nom et les coordonnées";
       text.addEventListener("click", () => {
         _editingId = wp.id;
+        _focusEditOf = wp.id;
         _rerender();
       });
       li.appendChild(text);
@@ -70,6 +101,7 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
     // ne fonctionne ni au tactile ni au clavier (pas d'événement
     // dragstart/dragover sur mobile).
     const upBtn = document.createElement("button");
+    upBtn.type = "button";
     upBtn.textContent = "▲";
     upBtn.title = "Déplacer vers le haut";
     upBtn.setAttribute("aria-label", `Déplacer "${displayLabel}" vers le haut`);
@@ -81,6 +113,7 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
     li.appendChild(upBtn);
 
     const downBtn = document.createElement("button");
+    downBtn.type = "button";
     downBtn.textContent = "▼";
     downBtn.title = "Déplacer vers le bas";
     downBtn.setAttribute("aria-label", `Déplacer "${displayLabel}" vers le bas`);
@@ -92,6 +125,7 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
     li.appendChild(downBtn);
 
     const delBtn = document.createElement("button");
+    delBtn.type = "button";
     delBtn.textContent = "✕";
     delBtn.title = "Supprimer ce point";
     delBtn.setAttribute("aria-label", `Supprimer "${displayLabel}"`);
@@ -102,18 +136,23 @@ export function renderWaypointList(waypoints, waypointManager, computedRoute) {
     li.appendChild(delBtn);
 
     li.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData(DRAG_TYPE, String(idx));
+      // Firefox ne démarre un glisser que si text/plain est aussi renseigné.
       e.dataTransfer.setData("text/plain", String(idx));
       e.dataTransfer.effectAllowed = "move";
     });
     li.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
     });
     li.addEventListener("drop", (e) => {
+      const raw = e.dataTransfer.getData(DRAG_TYPE);
+      if (raw === "") return;
       e.preventDefault();
-      const fromIndex = Number(e.dataTransfer.getData("text/plain"));
-      const toIndex = Number(li.dataset.index);
-      waypointManager.reorder(fromIndex, toIndex);
+      const fromIndex = Number(raw);
+      if (!Number.isInteger(fromIndex)) return;
+      waypointManager.reorder(fromIndex, Number(li.dataset.index));
     });
 
     container.appendChild(li);

@@ -34,6 +34,10 @@ d'attribution — distincte de la licence du code.
 
 ### Construire un trajet
 
+- **Tactile et mobile** : glisser le tracé et dessiner une zone à éviter
+  fonctionnent au doigt comme à la souris ; sur petit écran, le panneau se
+  replie ("Agrandir la carte") pour laisser toute la hauteur à la carte. Un
+  indicateur signale les calculs en cours.
 - **Interface en onglets** : *Itinéraire* (trajet A → B et ses étapes),
   *Boucle* (circuit généré) et *Mes trajets* (trajets sauvegardés, points
   d'intérêt). Les options (limite de vitesse, zones à éviter, repliées
@@ -49,7 +53,8 @@ d'attribution — distincte de la licence du code.
   automatiquement à chaque changement.
 - **Édition des waypoints** : marqueurs A, B et étapes numérotées,
   déplaçables par glisser-déposer ; suppression par clic droit sur un
-  marqueur (ou sélection + touche Suppr) ; insertion d'une étape en glissant
+  marqueur — appui long au doigt — (ou sélection + touche Suppr) ; insertion
+  d'une étape en glissant
   le tracé (une poignée apparaît au survol, avec la vitesse du tronçon).
   Liste réordonnable dans la sidebar (glisser-déposer ou boutons ▲▼,
   utilisables au clavier/tactile), avec suppression d'un point précis.
@@ -106,7 +111,8 @@ d'attribution — distincte de la licence du code.
 
 ### Sauvegarde et partage
 
-- **Sauvegarde / édition** : un trajet calculé peut être nommé, annoté
+- **Sauvegarde / édition** : un trajet calculé peut être nommé (puis
+  renommé en mode modification), annoté
   (champ description libre) et sauvegardé ; un trajet déjà sauvegardé se
   rouvre en édition ("Modifier" → mutation → "Enregistrer les
   modifications", distinct d'une nouvelle création) ou se **duplique**
@@ -115,7 +121,9 @@ d'attribution — distincte de la licence du code.
 - **Brouillon persistant** : le trajet en cours de construction est
   automatiquement sauvegardé en local (`localStorage`) et restauré si la
   page est rechargée par accident.
-- **Import / export GPX** : export d'un trajet sauvegardé au format GPX,
+- **Import / export GPX** : export au format GPX d'un trajet sauvegardé
+  (depuis la liste) ou du trajet affiché, même non sauvegardé (bouton
+  "Exporter en GPX", le nom saisi sert de nom de fichier) ;
   import d'un fichier GPX externe — les waypoints sont **extraits puis
   recalculés** par le moteur de routage (pas de rejeu tel quel), pour que
   le filtre anti-80 km/h s'applique toujours, même à un trajet importé.
@@ -226,11 +234,22 @@ GraphHopper (port 8989) n'est publié que sur `127.0.0.1` : il n'est
 joignable ni depuis le LAN ni depuis l'extérieur, seul le backend proxy
 l'est.
 
+Les deux conteneurs s'exécutent sans privilèges root. Leur script de
+démarrage remet d'abord à l'utilisateur dédié (`app`, UID 1000, pour le
+backend ; `graphhopper`, UID 10001) la propriété des données créées par une
+version antérieure qui tournait en root (`./backend/data`, volume
+`graph-cache`), puis abandonne ces privilèges — une installation existante
+se met donc à jour sans manipulation. Si l'utilisateur de l'hôte
+propriétaire de `./backend/data` n'a pas l'UID 1000, construire l'image
+backend avec `--build-arg APP_UID=<uid> --build-arg APP_GID=<gid>`.
+
 ### Images publiées
 
 `.github/workflows/publish-docker.yml` construit et publie automatiquement
 les images `backend` et `graphhopper` sur GitHub Container Registry à
-chaque mise à jour de `main` (tags `latest` et `<sha du commit>`) :
+chaque mise à jour de `main` (tags `latest` et `<sha du commit>`) et à
+chaque tag de version `vX.Y.Z` (tags `X.Y.Z` et `X.Y`), avec attestation de
+provenance et SBOM (voir [CHANGELOG.md](CHANGELOG.md)) :
 
 ```
 ghcr.io/vincent6785/circuit-forgery-backend:latest
@@ -268,6 +287,13 @@ stack telle quelle sur une machine directement joignable depuis Internet
 (VM cloud, port forwarding) sans ajouter sa propre authentification
 (reverse proxy, VPN...) devant.
 
+Attention aussi au pare-feu de l'hôte : les ports publiés par Docker
+contournent les règles `ufw`/`firewalld` (Docker insère ses propres règles
+iptables). Pour restreindre l'accès au backend, limiter la publication du
+port dans `docker-compose.yml` — par exemple `"127.0.0.1:8000:8000"` derrière
+un reverse proxy — plutôt que de compter sur le pare-feu. Voir
+[SECURITY.md](SECURITY.md) pour signaler une vulnérabilité.
+
 ## Configuration
 
 Le backend se configure par variables d'environnement, préfixées `CF_`
@@ -280,11 +306,20 @@ ajuster :
 | `CF_GRAPHHOPPER_URL` | `http://graphhopper:8989` | URL interne de l'instance GraphHopper (déjà fixée par `docker-compose.yml`) |
 | `CF_GRAPHHOPPER_NO_LIMIT_PROFILE` | `moto_no_limit` | Profil GraphHopper utilisé pour "Aucune limite" (voir Architecture) |
 | `CF_DATABASE_PATH` | `/data/circuit-forgery.db` | Chemin du fichier SQLite (monté sur `./backend/data`) |
-| `CF_MAX_WAYPOINTS` | `20` | Nombre maximal de points par trajet (protège la complexité des requêtes GraphHopper) |
+| `CF_MAX_WAYPOINTS` | `100` | Nombre maximal de points par trajet (protège la complexité des requêtes GraphHopper) |
+| `CF_MAX_AVOID_ZONES` | `20` | Nombre maximal de zones à éviter par trajet |
 | `CF_MAX_ROUND_TRIP_DISTANCE_M` | `500000` | Distance cible maximale pour un circuit en boucle généré |
 | `CF_MAX_AVOID_ZONE_RADIUS_M` | `20000` | Rayon maximal d'une zone à éviter |
 | `CF_MAX_GPX_UPLOAD_BYTES` | `5000000` | Taille maximale d'un fichier GPX importé |
+| `CF_MAX_REQUEST_BODY_BYTES` | `10000000` | Taille maximale d'un corps de requête, refusée en 413 avant sa lecture complète |
+| `CF_LOG_LEVEL` | `INFO` | Niveau des journaux du backend (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
 | `CF_NOMINATIM_URL` | `https://nominatim.openstreetmap.org` | Serveur Nominatim utilisé pour la recherche d'adresse |
+| `CF_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | Serveur de tuiles du fond de carte (autorisé automatiquement par la Content-Security-Policy) |
+| `CF_TILE_ATTRIBUTION` | `&copy; OpenStreetMap contributors` | Attribution affichée pour ce fond de carte |
+
+Sondes de santé du backend : `/api/health/live` (le serveur répond, utilisée
+par le healthcheck Docker), `/api/health/ready` (503 tant que GraphHopper ou
+la base ne répondent pas) et `/api/health` (état détaillé, toujours 200).
 
 La heap JVM de GraphHopper se règle séparément via `JAVA_OPTS` dans
 `docker-compose.yml` (service `graphhopper`) — voir
@@ -303,10 +338,18 @@ un segment avec une limite de vitesse signalée > 80 km/h.
 
 ### End-to-end (Playwright)
 
-Nécessite la stack Docker démarrée (`docker compose up -d`, voir
-[Démarrage](#démarrage)) — les tests s'exécutent contre l'application
-réelle (frontend + backend + GraphHopper), sans mocks (à une exception
-près, documentée ci-dessous).
+Nécessite la stack Docker démarrée **avec l'override de test**, qui
+construit le frontend avec les accès internes utilisés par les tests
+(`window.__map`…) — absents des images de production. La suite pilote
+ensuite un vrai navigateur contre l'application réelle (frontend + backend +
+GraphHopper), sans mocks (à une exception près, documentée ci-dessous).
+Avant chaque run, `tests/e2e/global-setup.js` supprime les données de test
+laissées par un run précédent interrompu (trajets « Playwright… », points
+d'intérêt de test), pour que les suites repartent d'une base propre.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+```
 
 ```bash
 cd frontend
@@ -314,6 +357,10 @@ npm install
 npx playwright install --with-deps chromium   # une seule fois
 npm run test:e2e
 ```
+
+L'image de test porte son propre nom (`circuit-forgery-backend:e2e`) : pour
+revenir ensuite à l'image de production, relancer `docker compose up -d
+--build` sans l'override.
 
 `--with-deps` installe aussi les bibliothèques système nécessaires au
 navigateur headless ; le script est pensé pour Debian/Ubuntu et peut
@@ -365,7 +412,8 @@ plus ciblés que la suite Playwright pour ces cas-là.
 ```bash
 cd backend
 docker run --rm -v "$PWD":/app -w /app python:3.12-slim \
-  bash -c "pip install -q -r requirements-dev.txt && python -m pytest -q"
+  bash -c "pip install -q --require-hashes --no-deps -r requirements.lock \
+    && pip install -q -r requirements-dev.txt && python -m pytest -q"
 ```
 
 Passer par Docker plutôt qu'un virtualenv local garantit la même version de
@@ -381,6 +429,17 @@ python3 -m venv .venv
 .venv/bin/python -m pytest
 ```
 
+Les dépendances de production sont figées, dépendances transitives et
+hashes compris, dans `requirements.lock`, installé par l'image Docker avec
+`pip install --require-hashes`. Après toute modification de
+`requirements.txt`, le régénérer (la CI vérifie qu'il est à jour) :
+
+```bash
+cd backend
+uvx --from uv uv pip compile requirements.txt --generate-hashes \
+  --python-version 3.12 --python-platform x86_64-manylinux_2_28 --no-header -o requirements.lock
+```
+
 ## Maintenance des données OSM
 
 ```bash
@@ -390,6 +449,15 @@ python3 -m venv .venv
 Pas d'automatisation en cron : l'import complet de la France consomme
 beaucoup de RAM et prend plusieurs minutes, mieux vaut le déclencher
 consciemment.
+
+Le nouvel extrait est téléchargé (avec reprise en cas de coupure) et vérifié
+avant l'arrêt de GraphHopper : l'interruption de service se limite au
+réimport, et un téléchargement en échec laisse l'extrait et le service en
+place. L'extrait précédent est conservé
+(`data/osm/france-latest.osm.pbf.previous`), et la date des données
+importées est consignée dans `data/osm/france-latest.osm.pbf.info`
+(attribution ODbL). Avec les images publiées :
+`COMPOSE_FILES="-f docker-compose.yml -f docker-compose.images.yml" ./scripts/update-osm-data.sh`.
 
 ## Points de vigilance
 
@@ -471,8 +539,12 @@ régression par `frontend/tests/e2e/route-error-handling.spec.js`.
 ### Dépannage import (RAM)
 
 `JAVA_OPTS` dans `docker-compose.yml` (service `graphhopper`) contrôle la
-heap JVM (`-Xmx`). Prévoir 8-16 Go pour la France entière ; augmenter si
-`OutOfMemoryError` pendant l'import.
+heap JVM (`-Xmx`, 16 Go par défaut, même valeur que l'image). Prévoir
+8-16 Go pour la France entière ; augmenter si `OutOfMemoryError` pendant
+l'import. `-XX:+ExitOnOutOfMemoryError` arrête la JVM au premier manque de
+mémoire (le conteneur redémarre alors) plutôt que de la laisser à moitié
+fonctionnelle. La JVM consomme aussi de la mémoire hors heap : garder une
+marge de quelques Go sur la machine.
 
 ## État des vérifications
 

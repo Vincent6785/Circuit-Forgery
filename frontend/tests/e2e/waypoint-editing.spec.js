@@ -1,18 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt } from "./helpers.js";
+import { clickMapAt, setupParisView } from "./helpers.js";
 
 // Zoom sur Paris pour espacer suffisamment les points à l'écran — évite
 // qu'un clic tombe sur un marqueur existant ou sur les contrôles Leaflet en
 // bas à droite.
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.86, 2.33], 13, { animate: false }));
-  await page.waitForTimeout(300);
-}
 
 test("suppression d'un point via le bouton de la liste", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
 
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
@@ -28,7 +22,7 @@ test("suppression d'un point via le bouton de la liste", async ({ page }) => {
 });
 
 test("réorganisation des points par glisser-déposer dans la liste", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
 
   await clickMapAt(page, 48.8566, 2.3522); // A
   await clickMapAt(page, 48.8738, 2.295); // B
@@ -49,7 +43,7 @@ test("réorganisation des points par glisser-déposer dans la liste", async ({ p
 });
 
 test("réorganisation des points via les boutons ▲▼ (alternative tactile/clavier au drag)", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
 
   await clickMapAt(page, 48.8566, 2.3522); // A
   await clickMapAt(page, 48.8738, 2.295); // B
@@ -67,7 +61,7 @@ test("réorganisation des points via les boutons ▲▼ (alternative tactile/cla
 });
 
 test("sélection d'un marqueur puis suppression au clavier (touche Suppr)", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
 
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
@@ -77,8 +71,31 @@ test("sélection d'un marqueur puis suppression au clavier (touche Suppr)", asyn
   await page.keyboard.press("Delete");
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
 
-  await page.locator(".leaflet-marker-icon").first().click();
+  // Cible une épingle de waypoint, pas n'importe quel marqueur : un point
+  // d'intérêt créé par une autre suite en parallèle (base partagée) peut
+  // aussi apparaître sur la carte.
+  await page.locator(".wp-pin").first().click();
   await page.keyboard.press("Delete");
 
   await expect(page.locator("#waypoint-list li")).toHaveCount(1);
+});
+
+test("déposer un texte externe sur la liste ne réordonne pas les points", async ({ page }) => {
+  // Régression : Number("texte") donnait NaN, et splice(NaN, 1) déplaçait le premier point.
+  await setupParisView(page, [48.86, 2.33]);
+  await clickMapAt(page, 48.8566, 2.3522);
+  await clickMapAt(page, 48.8738, 2.295);
+  await clickMapAt(page, 48.87, 2.36);
+  const before = await page.evaluate(() => window.__getWaypoints().map((p) => p.id));
+
+  await page.evaluate(() => {
+    const target = document.querySelectorAll("#waypoint-list li")[2];
+    const dt = new DataTransfer();
+    dt.setData("text/plain", "bonjour");
+    target.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, bubbles: true, cancelable: true }));
+    target.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  });
+
+  const after = await page.evaluate(() => window.__getWaypoints().map((p) => p.id));
+  expect(after).toEqual(before);
 });

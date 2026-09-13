@@ -46,6 +46,49 @@ html, body, #app {
   margin: 0 0 0.5rem;
 }
 
+.sidebar-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Repli du panneau : petits écrans uniquement (voir la media query). */
+#sidebar-toggle {
+  display: none;
+}
+
+#route-busy {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+#route-busy::before {
+  content: "";
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: route-busy-spin 0.8s linear infinite;
+}
+
+@keyframes route-busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #route-busy::before {
+    animation: none;
+  }
+}
+
 .tabs {
   display: flex;
 }
@@ -363,10 +406,44 @@ kbd {
   white-space: nowrap;
 }
 
+/* Libellés cliquables rendus comme de vrais boutons (accessibles au clavier),
+   sans en avoir l'apparence. Sélecteurs d'id : plus spécifiques que
+   ".panel button", qui leur donnerait sinon bordure et largeur pleine. */
+#saved-routes-list .list-item-label,
+#poi-list .list-item-label,
+#alternatives-list .list-item-label,
+#waypoint-list .waypoint-label {
+  display: block;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.list-item-label:focus-visible,
+.waypoint-label:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+button.confirm-pending {
+  color: #c62828;
+  font-weight: 600;
+}
+
+.poi-form-error {
+  margin: 0;
+  color: #7a2119;
+  font-size: 0.85rem;
+}
+
 #alternatives-list li {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 #alternatives-list li.selected {
@@ -397,6 +474,35 @@ kbd {
 #saved-routes-list li a {
   text-decoration: none;
   padding: 0 0.2rem;
+}
+
+/* Actions d'un élément de liste (modifier, dupliquer, exporter, favori,
+   supprimer) alignées sur une ligne, à droite du libellé : sans ces règles,
+   ".panel button" les empilait en blocs pleine largeur, chaque trajet
+   occupant alors plusieurs centaines de pixels de hauteur. */
+#saved-routes-list li > span,
+#poi-list li > span,
+#avoid-zone-list li > span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+#saved-routes-list li > span > button,
+#poi-list li > span > button,
+#avoid-zone-list li > span > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 1.9rem;
+  margin: 0;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 #clear-route-btn {
@@ -449,6 +555,7 @@ kbd {
 
 .waypoint-label {
   flex: 1;
+  min-width: 0;
   font-size: 0.85rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -523,6 +630,8 @@ kbd {
 
 .route-hit.leaflet-interactive {
   cursor: grab;
+  /* Au doigt, glisser le tracé insère une étape au lieu de déplacer la carte. */
+  touch-action: none;
 }
 
 .poi-form-popup {
@@ -574,5 +683,41 @@ kbd {
   #map {
     flex: none;
     height: 45vh;
+  }
+
+  #sidebar-toggle {
+    display: inline-block;
+    flex-shrink: 0;
+    margin: 0 0 0.5rem;
+    padding: 0.3rem 0.6rem;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  /* Panneau replié : en-tête et onglets seulement, la carte prend le reste. */
+  #app.sidebar-collapsed {
+    height: 100dvh;
+  }
+
+  #app.sidebar-collapsed #sidebar {
+    height: auto;
+  }
+
+  #app.sidebar-collapsed .sidebar-scroll,
+  #app.sidebar-collapsed #route-info {
+    display: none;
+  }
+
+  /* Replié, le pied ne garde que ce qui ne doit pas passer inaperçu : message
+     d'erreur ou d'information et calcul en cours. */
+  #app.sidebar-collapsed .sidebar-footer:not(:has(> #route-error:not(.hidden), > #route-busy:not(.hidden))) {
+    display: none;
+  }
+
+  #app.sidebar-collapsed #map {
+    flex: 1;
+    height: auto;
+    min-height: 0;
   }
 }

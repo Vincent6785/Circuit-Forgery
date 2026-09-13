@@ -1,4 +1,5 @@
 import { computeAlternatives } from "../api/routing.js";
+import { createLatestRequest } from "../api/latest-request.js";
 import { showRouteInfo, showRouteError, hideRouteError, formatDuration } from "./sidebar.js";
 
 const DEFAULT_TITLE = "Uniquement pour un trajet à 2 points";
@@ -23,52 +24,71 @@ const SPEED_LIMIT_TITLE =
  * alternatives sont donc impossibles sous cette contrainte, mieux vaut
  * l'expliquer que le cacher. "Aucune limite" reste compatible : c'est un
  * simple changement de profil, pas un custom_model par requête. */
-export function initRouteAlternatives({ store, routeLayer }) {
+export function initRouteAlternatives({ store, routeLayer, trackBusy = (promise) => promise }) {
   const btn = document.getElementById("show-alternatives-btn");
   const list = document.getElementById("alternatives-list");
 
-  // Garde-fou "dernier appel gagne" (même motif que recomputeSeq dans
-  // route-controller.js) : sans lui, changer les waypoints pendant que la
-  // requête est en vol affiche quand même les alternatives de l'ancienne
-  // paire, et en sélectionner une écrase le tracé courant avec une
-  // géométrie qui ne correspond plus aux waypoints affichés.
-  let requestSeq = 0;
+  // "Dernier appel gagne" : changer les waypoints pendant que la requête est
+  // en vol l'annule ; sans ça, les alternatives de l'ancienne paire
+  // s'affichaient quand même, et en sélectionner une écrasait le tracé
+  // courant avec une géométrie ne passant plus par les marqueurs.
+  const request = createLatestRequest();
 
   function reset() {
-    requestSeq++;
+    request.cancel();
     list.classList.add("hidden");
     list.innerHTML = "";
   }
 
-  store.subscribe((state) => {
+  function buttonState(state) {
     const relevant = state.waypoints.length === 2;
     const blockedByAvoidZones = relevant && state.avoidZones.length > 0;
     const blockedBySpeedLimit = relevant && state.speedLimitKmh !== null;
-    const blocked = blockedByAvoidZones || blockedBySpeedLimit;
+    const title = blockedByAvoidZones ? AVOID_ZONE_TITLE : blockedBySpeedLimit ? SPEED_LIMIT_TITLE : DEFAULT_TITLE;
+    return { relevant, blocked: blockedByAvoidZones || blockedBySpeedLimit, title };
+  }
+
+  let lastWaypoints = null;
+  store.subscribe(
+    (state) => {
+    const { relevant, blocked, title } = buttonState(state);
     btn.classList.toggle("hidden", !relevant);
     btn.disabled = blocked;
-    btn.title = blockedByAvoidZones ? AVOID_ZONE_TITLE : blockedBySpeedLimit ? SPEED_LIMIT_TITLE : DEFAULT_TITLE;
-    if (!relevant || blocked) reset();
-  });
+    btn.title = title;
+    // Les alternatives affichées ne valent que pour la paire de points pour
+    // laquelle elles ont été calculées : déplacer A ou B (toujours deux
+    // points) ou charger un autre trajet doit aussi les invalider, sans quoi
+    // en choisir une dessinait un tracé ne passant plus par les marqueurs.
+    const waypointsChanged = state.waypoints !== lastWaypoints;
+    lastWaypoints = state.waypoints;
+    if (!relevant || blocked || waypointsChanged) reset();
+    },
+    { keys: ["waypoints", "avoidZones", "speedLimitKmh"] }
+  );
 
   btn.addEventListener("click", async () => {
     const { waypoints, noSpeedLimit } = store.getState();
     if (waypoints.length !== 2) return;
-    const seq = ++requestSeq;
     btn.disabled = true;
     try {
-      const { alternatives } = await computeAlternatives(
-        waypoints.map((p) => ({ lat: p.lat, lon: p.lon })),
-        noSpeedLimit
+      const outcome = await trackBusy(
+        request.run((signal) =>
+          computeAlternatives(
+            waypoints.map((p) => ({ lat: p.lat, lon: p.lon })),
+            noSpeedLimit,
+            { signal }
+          )
+        )
       );
-      if (seq !== requestSeq) return;
+      if (outcome.stale) return;
       hideRouteError();
-      _renderOptions(alternatives, store, routeLayer, list);
+      _renderOptions(outcome.value.alternatives, store, routeLayer, list);
     } catch (err) {
-      if (seq !== requestSeq) return;
       showRouteError(err.message);
     } finally {
-      btn.disabled = false;
+      // Pas simplement false : une zone ou une limite ajoutée pendant la
+      // requête doit laisser le bouton désactivé.
+      btn.disabled = buttonState(store.getState()).blocked;
     }
   });
 }
@@ -78,13 +98,22 @@ function _renderOptions(alternatives, store, routeLayer, list) {
   list.classList.remove("hidden");
   alternatives.forEach((alt, index) => {
     const li = document.createElement("li");
-    li.textContent = `Option ${index + 1} — ${(alt.distance_m / 1000).toFixed(1)} km, ${formatDuration(alt.duration_s)}`;
-    li.addEventListener("click", () => {
+    // Un vrai bouton, atteignable au clavier (un <li> cliquable ne l'était pas).
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "list-item-label";
+    option.textContent = `Option ${index + 1} — ${(alt.distance_m / 1000).toFixed(1)} km, ${formatDuration(alt.duration_s)}`;
+    li.appendChild(option);
+    option.addEventListener("click", () => {
       routeLayer.draw(alt.geometry_geojson, alt.max_speed_by_segment, alt.leg_boundaries);
       showRouteInfo(alt.distance_m, alt.duration_s);
-      store.setState({ computedRoute: alt }, { silent: true });
-      [...list.children].forEach((c) => c.classList.remove("selected"));
+      store.setState({ computedRoute: alt });
+      [...list.children].forEach((c) => {
+        c.classList.remove("selected");
+        c.firstElementChild?.setAttribute("aria-pressed", "false");
+      });
       li.classList.add("selected");
+      option.setAttribute("aria-pressed", "true");
     });
     list.appendChild(li);
   });

@@ -1,15 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, openTab } from "./helpers.js";
-
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.86, 2.33], 13, { animate: false }));
-  await page.waitForTimeout(300);
-}
+import { clickMapAt, openTab, setupParisView } from "./helpers.js";
 
 test("clic sur un point de la liste ouvre l'édition inline", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
 
@@ -19,7 +12,7 @@ test("clic sur un point de la liste ouvre l'édition inline", async ({ page }) =
 });
 
 test("renommer un waypoint persiste après sauvegarde et rechargement", async ({ page, request }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -46,7 +39,7 @@ test("renommer un waypoint persiste après sauvegarde et rechargement", async ({
 });
 
 test("description de trajet sauvegardée, restaurée au rechargement et en édition", async ({ page, request }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -78,7 +71,7 @@ test("description de trajet sauvegardée, restaurée au rechargement et en édit
 });
 
 test("modifier les coordonnées d'un waypoint déplace le point et recalcule", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -95,7 +88,7 @@ test("modifier les coordonnées d'un waypoint déplace le point et recalcule", a
 });
 
 test("Échap annule l'édition sans modifier le point", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
 
@@ -112,7 +105,7 @@ test("Échap annule l'édition sans modifier le point", async ({ page }) => {
 });
 
 test("distance depuis l'étape précédente affichée pour les points suivants uniquement", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -123,4 +116,36 @@ test("distance depuis l'étape précédente affichée pour les points suivants u
 
   const firstItem = page.locator("#waypoint-list li").first();
   await expect(firstItem.locator(".waypoint-label")).not.toContainText("km)");
+});
+
+test("l'édition d'un point en cours survit à la fin d'un calcul d'itinéraire", async ({ page }) => {
+  // Régression : la liste était reconstruite à chaque notification du store,
+  // effaçant la saisie en cours dès qu'un calcul se terminait.
+  await setupParisView(page, [48.86, 2.33]);
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/routes/compute", async (route) => {
+    await gate;
+    await route.continue();
+  });
+
+  await clickMapAt(page, 48.8566, 2.3522);
+  await clickMapAt(page, 48.8738, 2.295);
+
+  const firstItem = page.locator("#waypoint-list li").first();
+  await firstItem.locator(".waypoint-label").click();
+  const nameInput = firstItem.locator('input[type="text"]');
+  await nameInput.fill("Saisie en cours");
+
+  const computed = page.waitForResponse((r) => r.url().includes("/api/routes/compute"));
+  release();
+  await computed;
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
+
+  await expect(nameInput).toHaveValue("Saisie en cours");
+  await expect(nameInput).toBeFocused();
+  await nameInput.press("Enter");
+  await expect(page.locator("#waypoint-list li").first().locator(".waypoint-label")).toContainText("Saisie en cours");
 });

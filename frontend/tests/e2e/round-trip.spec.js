@@ -1,39 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { openTab, openRouteOptions } from "./helpers.js";
+import { clickMapAt, dragZone, openRouteOptions, openTab, setupParisView } from "./helpers.js";
 
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
-  await page.waitForTimeout(300);
+async function setupView(page) {
+  await setupParisView(page);
   await openTab(page, "loop");
-}
-
-async function clickMapAt(page, lat, lon) {
-  const point = await page.evaluate(
-    ([lat, lon]) => {
-      const p = window.__map.latLngToContainerPoint([lat, lon]);
-      return { x: p.x, y: p.y };
-    },
-    [lat, lon]
-  );
-  const box = await page.locator("#map").boundingBox();
-  await page.mouse.click(box.x + point.x, box.y + point.y);
-}
-
-async function dragZone(page, centerLat, centerLon, edgeLat, edgeLon) {
-  const [centerPoint, edgePoint] = await page.evaluate(
-    ([c, e]) => [window.__map.latLngToContainerPoint(c), window.__map.latLngToContainerPoint(e)],
-    [
-      [centerLat, centerLon],
-      [edgeLat, edgeLon],
-    ]
-  );
-  const box = await page.locator("#map").boundingBox();
-  await page.mouse.move(box.x + centerPoint.x, box.y + centerPoint.y);
-  await page.mouse.down();
-  await page.mouse.move(box.x + edgePoint.x, box.y + edgePoint.y, { steps: 5 });
-  await page.mouse.up();
 }
 
 // Le seed de round_trip n'est pas garanti reproductible à l'identique d'une
@@ -41,7 +11,7 @@ async function dragZone(page, centerLat, centerLon, edgeLat, edgeLon) {
 // waypoints, distance proche de la cible, tracé fermé), pas l'exactitude
 // géométrique.
 test("génération d'un circuit en boucle depuis un point cliqué", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
@@ -54,10 +24,10 @@ test("génération d'un circuit en boucle depuis un point cliqué", async ({ pag
 
   const waypoints = await page.evaluate(() => window.__getWaypoints());
   expect(waypoints.length).toBeGreaterThanOrEqual(2);
-  // Un emplacement reste réservé sous la limite de 20 waypoints
-  // (backend/app/routers/routes.py::compute_round_trip), pour qu'une
-  // mutation ultérieure ne la dépasse pas aussitôt.
-  expect(waypoints.length).toBeLessThan(20);
+  // Un emplacement reste réservé sous la limite de 100 waypoints
+  // (CF_MAX_WAYPOINTS, backend/app/routers/routes.py::compute_round_trip),
+  // pour qu'une mutation ultérieure ne la dépasse pas aussitôt.
+  expect(waypoints.length).toBeLessThan(100);
 
   const distanceText = await page.locator("#route-distance").textContent();
   const distanceKm = parseFloat(distanceText);
@@ -67,7 +37,7 @@ test("génération d'un circuit en boucle depuis un point cliqué", async ({ pag
   await expect(page.locator("#round-trip-variant-btn")).toBeEnabled();
 
   // Un vrai circuit round_trip renvoie bien plus de points bruts que
-  // max_waypoints (environ 280 pour 15km, contre 20) : le bandeau de
+  // max_waypoints (environ 280 pour 15km, contre 100) : le bandeau de
   // simplification s'affiche donc systématiquement en pratique, pas
   // seulement sur un cas limite artificiel.
   const banner = page.locator("#route-error");
@@ -78,7 +48,7 @@ test("génération d'un circuit en boucle depuis un point cliqué", async ({ pag
 });
 
 test("ajouter un point après un circuit dense ne dépasse pas la limite de waypoints", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
@@ -97,7 +67,7 @@ test("ajouter un point après un circuit dense ne dépasse pas la limite de wayp
 });
 
 test("le bouton fermer la boucle est déjà désactivé après génération d'un circuit", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
@@ -111,7 +81,7 @@ test("le bouton fermer la boucle est déjà désactivé après génération d'un
 });
 
 test("Échap annule le mode génération sans créer de circuit", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
@@ -129,7 +99,7 @@ test("Échap annule le mode génération sans créer de circuit", async ({ page 
 });
 
 test("le bouton Annuler sort du mode génération sans créer de circuit", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
@@ -145,13 +115,13 @@ test("le bouton Annuler sort du mode génération sans créer de circuit", async
 test("le clic normal sur la carte n'ajoute pas de point tant qu'aucune génération n'est demandée", async ({
   page,
 }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await expect(page.locator("#waypoint-list li")).toHaveCount(1);
 });
 
 test("fermer la boucle ajoute le point de départ en fin de trajet", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
@@ -169,7 +139,7 @@ test("fermer la boucle ajoute le point de départ en fin de trajet", async ({ pa
 });
 
 test("un point de passage défini est bien inséré dans le circuit généré", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.locator("#round-trip-forced-point-btn").click();
   await expect(page.locator("#round-trip-hint-text")).toContainText("devra traverser");
@@ -190,7 +160,7 @@ test("un point de passage défini est bien inséré dans le circuit généré", 
 });
 
 test("Échap pendant le mode point de passage n'en définit aucun", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.locator("#round-trip-forced-point-btn").click();
   await expect(page.locator("#round-trip-hint")).not.toHaveClass(/hidden/);
@@ -204,7 +174,7 @@ test("Échap pendant le mode point de passage n'en définit aucun", async ({ pag
 });
 
 test("retirer le point de passage avant génération l'exclut du circuit", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.locator("#round-trip-forced-point-btn").click();
   await clickMapAt(page, 48.87, 2.34);
@@ -230,7 +200,7 @@ test("Effacer les points retire aussi un point de passage en attente", async ({ 
   // round-trip, invisible du reset fait par "Effacer les points" (qui ne
   // connaît que le store) — le marqueur restait affiché et le point était
   // quand même appliqué à la génération suivante malgré le "reset" affiché.
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await expect(page.locator("#waypoint-list li")).toHaveCount(1);
 
@@ -263,7 +233,7 @@ test("Effacer les points désactive Nouvelle variante et régénère avec le bon
   // "Nouvelle variante" restait activé et régénérait un circuit sans
   // rapport avec l'ancien point de départ, écrasant silencieusement ce qui
   // venait d'être effacé.
-  await setupParisView(page);
+  await setupView(page);
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
@@ -281,7 +251,7 @@ test("générer un circuit en boucle avec une zone à éviter active ne plante p
   // génération de circuit ignorait totalement les zones à éviter déjà
   // définies — jamais exercé par un test e2e avant ce cas, seul un test
   // unitaire mocké couvrait le nouveau champ.
-  await setupParisView(page);
+  await setupView(page);
 
   await openRouteOptions(page);
   await page.locator("#avoid-zone-toggle-btn").click();
@@ -304,7 +274,7 @@ test("générer un circuit en boucle avec une zone à éviter active ne plante p
 });
 
 test("inverser le sens inverse l'ordre des waypoints", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await clickMapAt(page, 48.87, 2.36);
@@ -317,7 +287,7 @@ test("inverser le sens inverse l'ordre des waypoints", async ({ page }) => {
 });
 
 test("quitter l'onglet Boucle annule le mode génération en attente", async ({ page }) => {
-  await setupParisView(page);
+  await setupView(page);
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();

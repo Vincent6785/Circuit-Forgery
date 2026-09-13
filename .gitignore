@@ -1,6 +1,8 @@
 # OSM data (large binary files, downloaded via scripts/download-osm-data.sh)
 data/osm/*.pbf
-data/osm/*.pbf.md5
+# Somme de contrôle, extrait précédent conservé, métadonnées, téléchargement en cours
+data/osm/*.pbf.*
+data/osm/.download/
 
 # GraphHopper compiled graph cache
 graphhopper/graph-cache/
@@ -10,11 +12,13 @@ data/graph-cache/
 backend/data/*.db
 backend/data/*.db-journal
 backend/data/*.db-wal
+backend/data/*.db-shm
 
 # Python
 __pycache__/
 *.pyc
 .venv/
+.pytest_cache/
 *.egg-info/
 
 # Node / frontend build

@@ -72,7 +72,10 @@ export class RouteLayer {
       this._cancelHoverFrame();
       this._insertInteraction?.hoverEnd();
     });
-    hitLine.on("mousedown", (e) => this._onMouseDown(e));
+    // Pointer Events plutôt que l'événement "mousedown" de Leaflet : un même
+    // chemin pour la souris, le doigt et le stylet (mousedown ne se déclenche
+    // pas au toucher).
+    hitLine.getElement()?.addEventListener("pointerdown", (ev) => this._onPointerDown(ev));
     this._hitLine = hitLine;
 
     this._map.fitBounds(hitLine.getBounds(), { padding: [30, 30] });
@@ -114,16 +117,16 @@ export class RouteLayer {
     this._frame = null;
   }
 
-  _onMouseDown(e) {
-    // Bouton principal uniquement : un clic droit sur le tracé ouvre le menu
-    // de création de point d'intérêt, il ne doit pas insérer d'étape. Sans
-    // stopper l'événement, il remonte alors à la carte comme un clic normal
-    // (sélection du départ d'une boucle, dessin d'une zone…).
-    if (!this._insertInteraction?.isEnabled() || e.originalEvent?.button !== 0) return;
-    const nearest = this._nearestAt(e.latlng);
+  _onPointerDown(ev) {
+    // Hors mode d'insertion (génération de boucle, dessin de zone), l'événement
+    // suit son cours vers la carte. À la souris, bouton principal uniquement :
+    // un clic droit sur le tracé ouvre le menu de création de point d'intérêt.
+    if (!this._insertInteraction?.isEnabled()) return;
+    if (ev.pointerType === "mouse" && ev.button !== 0) return;
+    const nearest = this._nearestAt(this._map.mouseEventToLatLng(ev));
     if (!nearest) return;
     this._cancelHoverFrame();
     this._hitLine.closeTooltip();
-    this._insertInteraction.startDrag(e, nearest.segmentIndex);
+    this._insertInteraction.startDrag(ev, nearest.segmentIndex, nearest.latlng);
   }
 }

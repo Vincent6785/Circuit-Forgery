@@ -18,6 +18,6 @@ export function initRouteOptionsSummary(store) {
     const text = routeOptionsSummary(state);
     if (el.textContent !== text) el.textContent = text;
   }
-  store.subscribe(render);
+  store.subscribe(render, { keys: ["speedLimitKmh", "noSpeedLimit", "avoidZones"] });
   render(store.getState());
 }

@@ -17,6 +17,15 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 import app.db.models  # noqa: E402,F401  (import nécessaire pour enregistrer les modèles auprès de Base)
 from app.db.session import Base, get_db  # noqa: E402
 from app.main import app as fastapi_app  # noqa: E402
+from app.services.geocoding_client import geocoding_client  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_geocoding_cache():
+    # Singleton partagé : un résultat mis en cache par un test ne doit pas en fausser un autre.
+    geocoding_client.clear_cache()
+    yield
+    geocoding_client.clear_cache()
 
 
 @pytest.fixture()

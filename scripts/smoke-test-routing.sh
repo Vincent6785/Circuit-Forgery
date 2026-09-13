@@ -3,6 +3,10 @@
 # Nécessite: curl, jq. GraphHopper doit tourner sur GRAPHHOPPER_URL (défaut: http://localhost:8989).
 set -euo pipefail
 
+for tool in curl jq; do
+  command -v "$tool" > /dev/null || { echo "Outil manquant : $tool" >&2; exit 1; }
+done
+
 GRAPHHOPPER_URL="${GRAPHHOPPER_URL:-http://localhost:8989}"
 PROFILE="moto_no_fast"
 
@@ -20,7 +24,8 @@ for trip in "${TRIPS[@]}"; do
 
   # moto_no_fast n'a pas de préparation CH (custom_model figé à l'import) : il faut explicitement
   # désactiver CH pour que GraphHopper utilise la préparation LM (Landmarks) de ce profil.
-  response=$(curl -sS -G "$GRAPHHOPPER_URL/route" \
+  # --max-time : un GraphHopper bloqué fait échouer le test au lieu de le figer.
+  response=$(curl -sS --max-time 120 -G "$GRAPHHOPPER_URL/route" \
     --data-urlencode "point=$from" \
     --data-urlencode "point=$to" \
     --data-urlencode "profile=$PROFILE" \

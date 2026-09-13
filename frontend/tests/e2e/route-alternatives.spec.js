@@ -1,27 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, openRouteOptions } from "./helpers.js";
-
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
-  await page.waitForTimeout(300);
-}
-
-async function dragZone(page, centerLat, centerLon, edgeLat, edgeLon) {
-  const [centerPoint, edgePoint] = await page.evaluate(
-    ([c, e]) => [window.__map.latLngToContainerPoint(c), window.__map.latLngToContainerPoint(e)],
-    [
-      [centerLat, centerLon],
-      [edgeLat, edgeLon],
-    ]
-  );
-  const box = await page.locator("#map").boundingBox();
-  await page.mouse.move(box.x + centerPoint.x, box.y + centerPoint.y);
-  await page.mouse.down();
-  await page.mouse.move(box.x + edgePoint.x, box.y + edgePoint.y, { steps: 5 });
-  await page.mouse.up();
-}
+import { clickMapAt, dragZone, mapPointAt, openRouteOptions, setupParisView } from "./helpers.js";
 
 test("bouton alternatives absent pour un trajet à plus de 2 points", async ({ page }) => {
   await setupParisView(page);
@@ -88,4 +66,29 @@ test("le bouton alternatives redevient masqué après ajout d'un 3e point", asyn
   await clickMapAt(page, 48.87, 2.36);
   await expect(page.locator("#show-alternatives-btn")).toHaveClass(/hidden/);
   await expect(page.locator("#alternatives-list")).toHaveClass(/hidden/);
+});
+
+test("déplacer un point efface les alternatives calculées pour l'ancienne paire", async ({ page }) => {
+  // Régression : avec toujours deux points, la liste restait affichée et
+  // choisir une option dessinait un tracé ne passant plus par les marqueurs.
+  await setupParisView(page);
+  await clickMapAt(page, 48.8566, 2.3522);
+  await clickMapAt(page, 48.8738, 2.295);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
+  await page.waitForTimeout(500);
+
+  await page.locator("#show-alternatives-btn").click();
+  await expect(page.locator("#alternatives-list li").first()).toBeVisible();
+
+  const pin = await page.locator(".wp-pin", { hasText: "B" }).boundingBox();
+  const to = await mapPointAt(page, 48.868, 2.32);
+  const recomputed = page.waitForResponse((r) => r.url().includes("/api/routes/compute"));
+  await page.mouse.move(pin.x + pin.width / 2, pin.y + pin.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 10 });
+  await page.mouse.up();
+  await recomputed;
+
+  await expect(page.locator("#alternatives-list")).toBeHidden();
+  await expect(page.locator("#alternatives-list li")).toHaveCount(0);
 });

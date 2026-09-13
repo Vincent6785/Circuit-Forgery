@@ -1,11 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, openRouteOptions, openTab } from "./helpers.js";
+import { clickMapAt, openRouteOptions, openTab, setupParisView } from "./helpers.js";
 
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
-  await page.waitForTimeout(300);
+async function setupView(page) {
+  await setupParisView(page);
   await openRouteOptions(page);
 }
 
@@ -30,7 +27,7 @@ async function setupNormandyView(page) {
 }
 
 test("abaisser la limite de vitesse resserre le filtre appliqué au trajet", async ({ page, request }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);
@@ -60,7 +57,7 @@ test("générer un circuit en boucle avec un seuil de vitesse resserré actif ne
   // invalide ("point" au lieu de "points"), rejeté par GraphHopper avec
   // "You have to pass at least one point" — jamais exercé par un test e2e
   // avant ce cas, seul un test unitaire mocké couvrait cette branche.
-  await setupParisView(page);
+  await setupView(page);
   await page.fill("#speed-limit-input", "50");
   await page.waitForTimeout(500);
 
@@ -109,7 +106,7 @@ test("Aucune limite permet d'emprunter le Pont de Normandie (91 km -> ~70 km)", 
 test("le bouton alternatives se désactive avec un seuil personnalisé mais pas avec Aucune limite", async ({
   page,
 }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#show-alternatives-btn")).toBeEnabled();
@@ -128,7 +125,7 @@ test("le bouton alternatives se désactive avec un seuil personnalisé mais pas 
 });
 
 test("un réglage de vitesse personnalisé survit à la sauvegarde et au rechargement", async ({ page, request }) => {
-  await setupParisView(page);
+  await setupView(page);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/);

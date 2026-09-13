@@ -1,36 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, openRouteOptions } from "./helpers.js";
-
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.86, 2.33], 13, { animate: false }));
-  await page.waitForTimeout(300);
-}
-
-async function dragZone(page, centerLat, centerLon, edgeLat, edgeLon) {
-  const [centerPoint, edgePoint] = await page.evaluate(
-    ([c, e]) => [window.__map.latLngToContainerPoint(c), window.__map.latLngToContainerPoint(e)],
-    [
-      [centerLat, centerLon],
-      [edgeLat, edgeLon],
-    ]
-  );
-  const box = await page.locator("#map").boundingBox();
-  await page.mouse.move(box.x + centerPoint.x, box.y + centerPoint.y);
-  await page.mouse.down();
-  await page.mouse.move(box.x + edgePoint.x, box.y + edgePoint.y, { steps: 5 });
-  await page.mouse.up();
-}
+import { clickMapAt, dragZone, openRouteOptions, setupParisView } from "./helpers.js";
 
 test("boutons annuler/rétablir désactivés sans historique", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await expect(page.locator("#undo-waypoint-btn")).toBeDisabled();
   await expect(page.locator("#redo-waypoint-btn")).toBeDisabled();
 });
 
 test("Ctrl+Z restaure un point supprimé, Ctrl+Maj+Z le re-supprime", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await clickMapAt(page, 48.87, 2.36);
@@ -50,7 +28,7 @@ test("Ctrl+Z restaure un point supprimé, Ctrl+Maj+Z le re-supprime", async ({ p
 });
 
 test("boutons Annuler/Rétablir cliquables produisent le même effet que le clavier", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
@@ -65,7 +43,7 @@ test("boutons Annuler/Rétablir cliquables produisent le même effet que le clav
 });
 
 test("une nouvelle mutation après un undo efface la pile redo", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await page.locator("#undo-waypoint-btn").click();
@@ -76,7 +54,7 @@ test("une nouvelle mutation après un undo efface la pile redo", async ({ page }
 });
 
 test("Ctrl+Z annule l'ajout d'une zone à éviter comme une mutation de waypoint", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#undo-waypoint-btn")).toBeEnabled();
@@ -98,7 +76,7 @@ test("Ctrl+Z annule l'ajout d'une zone à éviter comme une mutation de waypoint
 test("annuler une mutation de waypoint après une zone restaure aussi la zone (historique combiné)", async ({
   page,
 }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
 
@@ -123,7 +101,7 @@ test("annuler une mutation de waypoint après une zone restaure aussi la zone (h
 });
 
 test("Ctrl+Z n'agit pas au niveau app pendant la frappe dans un champ texte", async ({ page }) => {
-  await setupParisView(page);
+  await setupParisView(page, [48.86, 2.33]);
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
 

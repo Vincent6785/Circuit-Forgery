@@ -1,14 +1,26 @@
+# Rotation des journaux : le pilote json-file par défaut les laisse sinon grossir
+# indéfiniment sur une machine qui tourne en continu.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   graphhopper:
     build: ./graphhopper
     environment:
-      # Ajuster selon la RAM disponible sur la machine (8-16g recommandé pour la France entière)
-      - JAVA_OPTS=-Xmx16g
+      # Ajuster -Xmx selon la RAM disponible sur la machine (8-16g recommandé pour la
+      # France entière, même valeur par défaut que graphhopper/Dockerfile).
+      # -XX:+ExitOnOutOfMemoryError : une JVM à court de mémoire s'arrête (puis redémarre
+      # via restart:) au lieu de rester à moitié fonctionnelle.
+      - JAVA_OPTS=-Xmx16g -XX:+ExitOnOutOfMemoryError
     volumes:
       - ./graphhopper/config.yml:/config/config.yml:ro
       - ./graphhopper/custom_models:/config/custom_models:ro
       - ./data/osm:/data:ro
       - graph-cache:/graph-cache
+    logging: *default-logging
     ports:
       # Loopback uniquement (debug local) : le backend joint GraphHopper via le réseau
       # docker-compose interne (nom de service "graphhopper"), pas via ce port publié.
@@ -37,6 +49,7 @@ services:
       - CF_DATABASE_PATH=/data/circuit-forgery.db
     volumes:
       - ./backend/data:/data
+    logging: *default-logging
     ports:
       # 0.0.0.0 côté conteneur + publication sur toutes les interfaces hôte :
       # c'est le seul service exposé au LAN (cf. Phase 7 du plan).
@@ -46,12 +59,12 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      # Sonde de vivacité simple (le serveur HTTP répond) : /api/health renvoie
-      # toujours 200 même si graphhopper/la base sont en panne (son rôle est de
-      # renseigner l'état dans le corps de la réponse, pas de coder ça en HTTP
-      # status) — le séquencement réel du démarrage est déjà assuré par
-      # depends_on/condition ci-dessus sur le service graphhopper.
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      # Sonde de vivacité seule (/api/health/live, sans dépendance) : l'ancienne
+      # sonde /api/health lançait un vrai calcul d'itinéraire GraphHopper toutes
+      # les 30 s. L'état des dépendances reste consultable sur /api/health, et
+      # /api/health/ready répond 503 tant qu'elles ne sont pas disponibles ; le
+      # séquencement du démarrage est assuré par depends_on ci-dessus.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/live', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
