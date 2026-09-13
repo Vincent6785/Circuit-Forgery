@@ -54,10 +54,10 @@ test("génération d'un circuit en boucle depuis un point cliqué", async ({ pag
 
   const waypoints = await page.evaluate(() => window.__getWaypoints());
   expect(waypoints.length).toBeGreaterThanOrEqual(2);
-  // Un emplacement reste réservé sous la limite de 20 waypoints
-  // (backend/app/routers/routes.py::compute_round_trip), pour qu'une
-  // mutation ultérieure ne la dépasse pas aussitôt.
-  expect(waypoints.length).toBeLessThan(20);
+  // Un emplacement reste réservé sous la limite de 100 waypoints
+  // (CF_MAX_WAYPOINTS, backend/app/routers/routes.py::compute_round_trip),
+  // pour qu'une mutation ultérieure ne la dépasse pas aussitôt.
+  expect(waypoints.length).toBeLessThan(100);
 
   const distanceText = await page.locator("#route-distance").textContent();
   const distanceKm = parseFloat(distanceText);
@@ -67,7 +67,7 @@ test("génération d'un circuit en boucle depuis un point cliqué", async ({ pag
   await expect(page.locator("#round-trip-variant-btn")).toBeEnabled();
 
   // Un vrai circuit round_trip renvoie bien plus de points bruts que
-  // max_waypoints (environ 280 pour 15km, contre 20) : le bandeau de
+  // max_waypoints (environ 280 pour 15km, contre 100) : le bandeau de
   // simplification s'affiche donc systématiquement en pratique, pas
   // seulement sur un cas limite artificiel.
   const banner = page.locator("#route-error");

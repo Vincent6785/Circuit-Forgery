@@ -280,10 +280,13 @@ ajuster :
 | `CF_GRAPHHOPPER_URL` | `http://graphhopper:8989` | URL interne de l'instance GraphHopper (déjà fixée par `docker-compose.yml`) |
 | `CF_GRAPHHOPPER_NO_LIMIT_PROFILE` | `moto_no_limit` | Profil GraphHopper utilisé pour "Aucune limite" (voir Architecture) |
 | `CF_DATABASE_PATH` | `/data/circuit-forgery.db` | Chemin du fichier SQLite (monté sur `./backend/data`) |
-| `CF_MAX_WAYPOINTS` | `20` | Nombre maximal de points par trajet (protège la complexité des requêtes GraphHopper) |
+| `CF_MAX_WAYPOINTS` | `100` | Nombre maximal de points par trajet (protège la complexité des requêtes GraphHopper) |
+| `CF_MAX_AVOID_ZONES` | `20` | Nombre maximal de zones à éviter par trajet |
 | `CF_MAX_ROUND_TRIP_DISTANCE_M` | `500000` | Distance cible maximale pour un circuit en boucle généré |
 | `CF_MAX_AVOID_ZONE_RADIUS_M` | `20000` | Rayon maximal d'une zone à éviter |
 | `CF_MAX_GPX_UPLOAD_BYTES` | `5000000` | Taille maximale d'un fichier GPX importé |
+| `CF_MAX_REQUEST_BODY_BYTES` | `10000000` | Taille maximale d'un corps de requête, refusée en 413 avant sa lecture complète |
+| `CF_LOG_LEVEL` | `INFO` | Niveau des journaux du backend (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
 | `CF_NOMINATIM_URL` | `https://nominatim.openstreetmap.org` | Serveur Nominatim utilisé pour la recherche d'adresse |
 
 La heap JVM de GraphHopper se règle séparément via `JAVA_OPTS` dans

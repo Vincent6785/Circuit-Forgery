@@ -26,3 +26,17 @@ def test_settings_rejects_max_waypoints_below_two():
 
 def test_settings_accepts_defaults():
     Settings()  # ne doit pas lever
+
+
+def test_settings_default_max_waypoints_is_100():
+    assert Settings().max_waypoints == 100
+
+
+def test_settings_rejects_zero_request_body_limit():
+    with pytest.raises(ValidationError):
+        Settings(max_request_body_bytes=0)
+
+
+def test_settings_rejects_unknown_log_level():
+    with pytest.raises(ValidationError):
+        Settings(log_level="VERBOSE")

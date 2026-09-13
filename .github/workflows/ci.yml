@@ -27,6 +27,9 @@ jobs:
           docker run --rm -v "$PWD":/app -w /app python:3.12-slim \
             bash -c "pip install -q -r requirements-dev.txt && python -m pytest -q"
 
+      - name: Audit des dépendances Python (vulnérabilités connues)
+        run: pipx run pip-audit -r backend/requirements.txt
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22

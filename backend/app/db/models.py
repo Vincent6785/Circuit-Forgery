@@ -22,10 +22,10 @@ class Route(Base):
     duration_s: Mapped[float] = mapped_column(Float, nullable=False)
     geometry_geojson: Mapped[str] = mapped_column(Text, nullable=False)
     is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
-    # Nullable — n'est renseignée que par une édition du tracé (PUT avec
-    # waypoints), pas par un simple renommage ou changement de favori.
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    # Nullable — renseignée par toute modification du trajet (PUT), sauf un
+    # simple changement de favori.
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     # Nullable — absent aussi bien pour les trajets créés avant l'existence
     # des zones à éviter que pour ceux qui n'en ont simplement aucune.
     avoid_zones_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
@@ -44,4 +44,4 @@ class PointOfInterest(Base):
     lon: Mapped[float] = mapped_column(Float, nullable=False)
     category: Mapped[str | None] = mapped_column(String, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)

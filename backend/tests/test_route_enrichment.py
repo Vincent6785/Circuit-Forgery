@@ -1,4 +1,4 @@
-from app.schemas.route import Waypoint
+from app.schemas.route import WaypointOut
 from app.services.route_enrichment import _leg_boundaries, path_to_response
 
 
@@ -75,6 +75,33 @@ def test_path_to_response_waypoints_passthrough():
         "points": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]},
         "details": {},
     }
-    waypoints = [Waypoint(lat=48.85, lon=2.35), Waypoint(lat=48.86, lon=2.36)]
+    waypoints = [WaypointOut(lat=48.85, lon=2.35), WaypointOut(lat=48.86, lon=2.36)]
     response = path_to_response(path, waypoints=waypoints)
     assert response.waypoints == waypoints
+
+
+def test_leg_boundaries_with_empty_coordinates_returns_empty():
+    # Régression : min() sur une plage vide levait ValueError (500).
+    assert _leg_boundaries([], [[0, 0], [1, 1]]) == []
+
+
+def test_path_to_response_uses_explicit_leg_boundaries():
+    path = {
+        "distance": 1000.0,
+        "time": 60000,
+        "points": {"type": "LineString", "coordinates": [[0, 0], [1, 1], [2, 2]]},
+        "snapped_waypoints": {"coordinates": [[0, 0]]},
+        "details": {},
+    }
+    assert path_to_response(path, leg_boundaries=[0, 1, 2]).leg_boundaries == [0, 1, 2]
+
+
+def test_path_to_response_accepts_coordinates_with_elevation():
+    path = {
+        "distance": 1000.0,
+        "time": 60000,
+        "points": {"type": "LineString", "coordinates": [[2.35, 48.85, 35.0], [2.36, 48.86, 40.0]]},
+        "details": {},
+    }
+    response = path_to_response(path)
+    assert response.cumulative_distance_m[1] > 0
