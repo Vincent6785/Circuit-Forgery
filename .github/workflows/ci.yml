@@ -12,8 +12,8 @@ on:
 
 jobs:
   test:
-    # Lint + pytest, aucun des deux ne dépend de GraphHopper. La suite
-    # Playwright, elle, nécessite une instance GraphHopper avec la France
+    # Lint, tests unitaires frontend (Vitest) et pytest : aucun ne dépend de
+    # GraphHopper. La suite Playwright, elle, nécessite une instance GraphHopper avec la France
     # entière importée (4,7 Go de PBF, 5 à 60 min d'import, cf. README) —
     # irréaliste dans ce runner. Reste une vérification locale avant de
     # merger, comme pratiqué jusqu'ici.
@@ -31,11 +31,12 @@ jobs:
         with:
           node-version: 22
 
-      - name: Lint frontend
+      - name: Lint et tests unitaires frontend
         run: |
           cd frontend
           npm install
           npm run lint
+          npm test
 
   docker-build:
     # Construit les deux images sans les publier : garde-fou avant merge

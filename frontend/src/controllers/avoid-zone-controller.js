@@ -1,6 +1,7 @@
 import { AvoidZoneLayer } from "../map/avoid-zone-layer.js";
 import { AvoidZoneDrawInteraction } from "../map/avoid-zone-draw-interaction.js";
 import { renderAvoidZoneList } from "../ui/avoid-zone-list.js";
+import { TAB_CHANGE_EVENT } from "../ui/tabs.js";
 
 const TOGGLE_LABEL_OFF = "🚫 Éviter une zone";
 const TOGGLE_LABEL_ON = "🚫 Glisser sur la carte pour dessiner…";
@@ -43,8 +44,9 @@ export function initAvoidZoneController({ map, store, waypointManager, history }
     const v = parseFloat(radiusInput.value);
     return Number.isFinite(v) && v > 0 ? v : null;
   });
-  toggleBtn.addEventListener("click", () => {
-    const active = drawInteraction.toggle();
+  function setDrawing(active) {
+    if (drawInteraction.isActive() === active) return;
+    drawInteraction.toggle();
     // L.DomEvent.stop() sur le mousedown du dessin ne suffit pas ici à
     // empêcher l'ajout normal d'un waypoint. Différence avec
     // route-insert-interaction.js, qui s'attache au mousedown d'une *couche*
@@ -58,5 +60,17 @@ export function initAvoidZoneController({ map, store, waypointManager, history }
     waypointManager.setAddOnMapClickEnabled(!active);
     toggleBtn.textContent = active ? TOGGLE_LABEL_ON : TOGGLE_LABEL_OFF;
     toggleBtn.classList.toggle("active", active);
+    toggleBtn.setAttribute("aria-pressed", String(active));
+  }
+
+  toggleBtn.addEventListener("click", () => setDrawing(!drawInteraction.isActive()));
+
+  // Le mode dessin ne doit pas rester actif hors de vue : panneau d'options
+  // replié ou onglet sans carte éditable.
+  document.getElementById("route-options").addEventListener("toggle", (e) => {
+    if (!e.currentTarget.open) setDrawing(false);
+  });
+  document.addEventListener(TAB_CHANGE_EVENT, (e) => {
+    if (e.detail.tab === "saved") setDrawing(false);
   });
 }

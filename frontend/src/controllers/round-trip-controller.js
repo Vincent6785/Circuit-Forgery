@@ -2,6 +2,7 @@ import L from "leaflet";
 import { computeRoundTrip } from "../api/routing.js";
 import { showRouteError, showBanner } from "../ui/sidebar.js";
 import { cheapestInsertionIndex } from "../utils/geo.js";
+import { TAB_CHANGE_EVENT } from "../ui/tabs.js";
 
 const FORCED_POINT_COLOR = "#6a1b9a";
 const START_HINT = "Cliquez un point de départ sur la carte…";
@@ -175,6 +176,12 @@ export function initRoundTripController({ map, store, waypointManager, recompute
   document.addEventListener("keydown", (e) => {
     if (!pickingMode || e.key !== "Escape") return;
     stopPicking();
+  });
+
+  // Quitter l'onglet Boucle abandonne le mode "cliquez sur la carte" : son
+  // indication n'y est plus visible, un clic produirait un effet inattendu.
+  document.addEventListener(TAB_CHANGE_EVENT, (e) => {
+    if (pickingMode && e.detail.tab !== "loop") stopPicking();
   });
 
   variantBtn.addEventListener("click", () => {

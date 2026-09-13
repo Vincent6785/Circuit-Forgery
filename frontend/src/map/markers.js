@@ -1,15 +1,23 @@
 import L from "leaflet";
 import { roleForIndex } from "./waypoint-role.js";
 import { buildDivIcon } from "./icon-utils.js";
+import { indexForNewPoint } from "../utils/itinerary.js";
 
-const SELECTED_OUTLINE = "#f9a825";
+const PIN_SIZE = 26;
+const MARKER_HINT = "glisser pour déplacer · clic droit pour supprimer";
 
-function dotIcon(color, selected) {
-  const outline = selected ? `box-shadow:0 0 0 3px ${SELECTED_OUTLINE};` : "box-shadow:0 0 2px rgba(0,0,0,0.6);";
+/** Épingle ronde avec badge ("A", "B" ou numéro d'étape). color et badge
+ * viennent de roleForIndex (constantes et position dans le trajet), jamais
+ * d'un libellé saisi : leur injection dans le HTML de l'icône est sûre. */
+function pinIcon(color, badge, selected) {
   return buildDivIcon(
-    `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid white;${outline}"></div>`,
-    { size: [14, 14], anchor: [7, 7] }
+    `<div class="wp-pin${selected ? " selected" : ""}" style="--pin-color:${color}">${badge}</div>`,
+    { size: [PIN_SIZE, PIN_SIZE], anchor: [PIN_SIZE / 2, PIN_SIZE / 2] }
   );
+}
+
+function iconKeyFor(color, badge, selected) {
+  return `${color}|${badge}|${selected}`;
 }
 
 let _nextId = 1;
@@ -35,14 +43,16 @@ export class WaypointManager {
     this._map = map;
     this._store = store;
     this._history = history;
-    this._points = []; // liste de {id, lat, lon}
-    this._markers = [];
+    this._points = []; // liste de {id, lat, lon, label}
+    // Marqueurs alignés sur _points (même index). Chaque entrée garde l'état
+    // déjà appliqué au marqueur, pour ne toucher au DOM que si nécessaire.
+    this._markers = []; // liste de {marker, iconKey, tooltipEl}
     this._selectedId = null;
     this._addOnMapClick = true;
 
     map.on("click", (e) => {
       if (!this._addOnMapClick) return;
-      this.addPoint(e.latlng.lat, e.latlng.lng);
+      this.addPointSmart(e.latlng.lat, e.latlng.lng, { append: e.originalEvent?.shiftKey === true });
     });
 
     document.addEventListener("keydown", (e) => {
@@ -119,12 +129,16 @@ export class WaypointManager {
     return this._history.canRedo();
   }
 
+  /** Ajout en fin de trajet : le point devient la nouvelle arrivée. */
   addPoint(lat, lon, label = null) {
-    this._pushHistory();
-    this._points.push({ id: newId(), lat, lon, label });
-    this._selectedId = null;
-    this._render();
-    this._notify(false);
+    this.insertPointAt(this._points.length, lat, lon, label);
+  }
+
+  /** Ajout depuis un clic carte : départ, puis arrivée, puis étapes insérées
+   * là où elles allongent le moins le trajet, l'arrivée restant l'arrivée
+   * (voir utils/itinerary.js). append force l'ajout en fin (Maj + clic). */
+  addPointSmart(lat, lon, { append = false, label = null } = {}) {
+    this.insertPointAt(indexForNewPoint(this._points, { lat, lon }, { append }), lat, lon, label);
   }
 
   insertPointAt(index, lat, lon, label = null) {
@@ -245,28 +259,85 @@ export class WaypointManager {
     this._addOnMapClick = enabled;
   }
 
+  isAddOnMapClickEnabled() {
+    return this._addOnMapClick;
+  }
+
   _notify(silent) {
     this._store.setState({ waypoints: this.getPoints() }, { silent });
   }
 
-  _render() {
-    this._markers.forEach((m) => m.remove());
-    this._markers = this._points.map((p, idx) => {
-      const { color } = roleForIndex(idx, this._points.length);
-      const marker = L.marker([p.lat, p.lon], {
-        icon: dotIcon(color, p.id === this._selectedId),
-        draggable: true,
-      }).addTo(this._map);
+  _pointForMarker(marker) {
+    const index = this._markers.findIndex((entry) => entry.marker === marker);
+    return index >= 0 ? this._points[index] : null;
+  }
 
-      marker.on("click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        this.selectPoint(p.id);
-      });
-      marker.on("dragend", () => {
-        const { lat, lng } = marker.getLatLng();
-        this.updatePoint(p.id, lat, lng);
-      });
-      return marker;
+  _createMarker(point, index, total) {
+    const { color, badge } = roleForIndex(index, total);
+    const selected = point.id === this._selectedId;
+    const tooltipEl = document.createElement("span");
+    const marker = L.marker([point.lat, point.lon], {
+      icon: pinIcon(color, badge, selected),
+      draggable: true,
+      autoPan: true,
+      riseOnHover: true,
+    }).addTo(this._map);
+    // Contenu en nœud DOM (textContent) : le libellé d'un point vient d'une
+    // saisie, d'un géocodage ou d'un fichier GPX.
+    marker.bindTooltip(tooltipEl, { direction: "top", offset: [0, -PIN_SIZE / 2] });
+
+    // Les gestionnaires retrouvent leur point au moment de l'événement : un
+    // même marqueur est réutilisé quand l'ordre des points change.
+    marker.on("click", (e) => {
+      L.DomEvent.stopPropagation(e);
+      const point = this._pointForMarker(marker);
+      if (point) this.selectPoint(point.id);
+    });
+    marker.on("dragend", () => {
+      const point = this._pointForMarker(marker);
+      if (!point) return;
+      const { lat, lng } = marker.getLatLng();
+      this.updatePoint(point.id, lat, lng);
+    });
+    marker.on("contextmenu", (e) => {
+      // Empêche le menu du navigateur et la création de point d'intérêt
+      // (clic droit sur la carte, main.js).
+      L.DomEvent.stop(e);
+      if (e.originalEvent) L.DomEvent.preventDefault(e.originalEvent);
+      const point = this._pointForMarker(marker);
+      if (point) this.removePoint(point.id);
+    });
+
+    return { marker, iconKey: iconKeyFor(color, badge, selected), tooltipEl };
+  }
+
+  /** Met à jour les marqueurs existants plutôt que de tout recréer : seuls
+   * un changement du nombre de points recrée les marqueurs, et seuls une
+   * icône, une position ou une infobulle réellement modifiées touchent au
+   * DOM. */
+  _render() {
+    const total = this._points.length;
+    if (this._markers.length !== total) {
+      this._markers.forEach((entry) => entry.marker.remove());
+      this._markers = this._points.map((p, idx) => this._createMarker(p, idx, total));
+    }
+
+    this._points.forEach((p, idx) => {
+      const entry = this._markers[idx];
+      const { color, badge, label } = roleForIndex(idx, total);
+      const selected = p.id === this._selectedId;
+
+      const iconKey = iconKeyFor(color, badge, selected);
+      if (entry.iconKey !== iconKey) {
+        entry.marker.setIcon(pinIcon(color, badge, selected));
+        entry.iconKey = iconKey;
+      }
+
+      const current = entry.marker.getLatLng();
+      if (current.lat !== p.lat || current.lng !== p.lon) entry.marker.setLatLng([p.lat, p.lon]);
+
+      const tooltipText = `${p.label || label} — ${MARKER_HINT}`;
+      if (entry.tooltipEl.textContent !== tooltipText) entry.tooltipEl.textContent = tooltipText;
     });
   }
 }

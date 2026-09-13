@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, collectPageErrors } from "./helpers.js";
+import { clickMapAt, collectPageErrors, openTab } from "./helpers.js";
 
 const ROUTE_NAME = "Trajet Playwright Test";
 
@@ -28,6 +28,7 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
 
   await page.fill("#save-route-name-input", ROUTE_NAME);
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
 
   const savedItem = page.locator("#saved-routes-list li", { hasText: ROUTE_NAME });
   await expect(savedItem).toBeVisible();
@@ -42,6 +43,7 @@ test("parcours nominal : clic -> calcul -> sauvegarde -> rechargement", async ({
   await expect(page.locator("#waypoint-list li")).toHaveCount(0);
   await expect(page.locator("#route-info")).toHaveClass(/hidden/);
 
+  await openTab(page, "saved");
   await expect(page.locator("#saved-routes-list li", { hasText: ROUTE_NAME })).toBeVisible();
 
   // Cliquer le trajet sauvegardé ne doit PAS déclencher un nouvel appel de

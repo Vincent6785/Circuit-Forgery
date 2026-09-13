@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt } from "./helpers.js";
+import { clickMapAt, openTab } from "./helpers.js";
 
 async function setupParisView(page) {
   await page.goto("/");
@@ -21,6 +21,7 @@ test("dupliquer un trajet sauvegardé crée une nouvelle entrée sans modifier l
   await page.fill("#save-route-name-input", originalName);
   await page.fill("#route-description-input", "Description originale");
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   const originalItem = page.locator("#saved-routes-list li", { hasText: originalName });
   await expect(originalItem).toBeVisible();
 
@@ -37,6 +38,7 @@ test("dupliquer un trajet sauvegardé crée une nouvelle entrée sans modifier l
   await expect(page.locator("#waypoint-list li")).toHaveCount(3);
 
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   const copyName = `Copie de ${originalName}`;
   await expect(page.locator("#saved-routes-list li", { hasText: copyName })).toBeVisible();
 

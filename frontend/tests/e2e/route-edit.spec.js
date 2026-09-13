@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, collectPageErrors } from "./helpers.js";
+import { clickMapAt, collectPageErrors, openTab } from "./helpers.js";
 
 const ROUTE_NAME = "Trajet Playwright Edit Test";
 
@@ -23,6 +23,7 @@ test("édition d'un trajet sauvegardé : Modifier -> mutation -> enregistrement 
 
   await page.fill("#save-route-name-input", ROUTE_NAME);
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   const savedItem = page.locator("#saved-routes-list li", { hasText: ROUTE_NAME });
   await expect(savedItem).toBeVisible();
 
@@ -53,6 +54,7 @@ test("édition d'un trajet sauvegardé : Modifier -> mutation -> enregistrement 
 
   // Persistance après rechargement : rouvrir en édition doit bien montrer les 3 points.
   await page.reload();
+  await openTab(page, "saved");
   await page
     .locator("#saved-routes-list li", { hasText: ROUTE_NAME })
     .locator("button", { hasText: "✎" })
@@ -75,6 +77,7 @@ test("annulation d'une édition ne modifie pas le trajet sauvegardé", async ({ 
   const name = ROUTE_NAME + " Cancel";
   await page.fill("#save-route-name-input", name);
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   const savedItem = page.locator("#saved-routes-list li", { hasText: name });
   await expect(savedItem).toBeVisible();
 

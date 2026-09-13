@@ -4,6 +4,7 @@ import { showRouteInfo, hideRouteInfo, showRouteError, hideRouteError } from "..
 import { refreshSavedRoutesList } from "../ui/saved-routes-list.js";
 import { renderWaypointList } from "../ui/waypoint-list.js";
 import { clearDraft } from "../state/draft-storage.js";
+import { switchTab } from "../ui/tabs.js";
 
 /**
  * Câble la sidebar "Trajet" : calcul et rendu du tracé courant, sauvegarde,
@@ -178,6 +179,8 @@ export function initRouteController({ store, waypointManager, routeLayer }) {
    * editingRouteId et le pré-remplissage du nom. Un champ d'état oublié ici
    * resterait sinon invisible dans les deux autres cas. */
   function applyLoadedRoute(route, { editingRouteId, prefillName = false } = {}) {
+    // Ouvert depuis "Mes trajets" : on bascule là où ses points s'éditent.
+    switchTab("route");
     waypointManager.setPointsSilently(route.waypoints);
     routeLayer.draw(route.geometry_geojson, []);
     showRouteInfo(route.distance_m, route.duration_s);

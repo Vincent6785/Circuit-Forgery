@@ -1,56 +1,129 @@
 import L from "leaflet";
+import { groupRunsByColor, nearestSegment } from "../utils/route-segments.js";
 
-function speedColor(speed) {
-  if (speed == null) return "#888888";
-  if (speed <= 50) return "#2e7d32"; // vert
-  if (speed <= 70) return "#f9a825"; // jaune/orange
-  return "#e64a19"; // orange foncé — ce palier ne devrait jamais dépasser 80 km/h, le filtre l'exclut en amont
-}
+const LINE_STYLE = { weight: 5, opacity: 0.85, interactive: false };
+// Zone sensible au survol, plus large que le trait visible pour qu'il soit
+// facile à attraper à la souris.
+const HIT_WEIGHT = 18;
+const INSERT_HINT = "Glisser pour ajouter une étape";
 
 export class RouteLayer {
   constructor(map, insertInteraction = null) {
     this._map = map;
-    this._segments = [];
     this._insertInteraction = insertInteraction;
+    this._group = L.layerGroup().addTo(map);
+    this._hitLine = null;
+    this._coords = [];
+    this._speeds = [];
+    // Coordonnées du tracé projetées en pixels "layer", calculées à la
+    // demande au premier survol : elles ne changent pas lors d'un
+    // déplacement de la carte, seulement au changement de zoom.
+    this._projected = null;
+    this._tooltipEl = document.createElement("span");
+    this._pendingLatLng = null;
+    this._frame = null;
+
+    map.on("zoomend viewreset", () => {
+      this._projected = null;
+    });
   }
 
   clear() {
-    this._segments.forEach((s) => s.remove());
-    this._segments = [];
+    this._cancelHoverFrame();
+    this._insertInteraction?.hoverEnd();
+    this._group.clearLayers();
+    this._hitLine = null;
+    this._coords = [];
+    this._speeds = [];
+    this._projected = null;
   }
 
   /**
    * geometry_geojson : { type: "LineString", coordinates: [[lon, lat], ...] }
-   * maxSpeedBySegment : max_speed (ou null) pour chaque point du tracé
+   * maxSpeedBySegment : max_speed (ou null) pour chaque segment du tracé
    * legBoundaries : index de chaque waypoint demandé dans coordinates (voir
-   *   backend/route_enrichment.py) — sert à insertInteraction pour déterminer
-   *   entre quels deux waypoints insérer un point glissé sur le tracé.
+   *   backend/app/services/route_enrichment.py) — sert à insertInteraction
+   *   pour déterminer entre quels deux waypoints insérer un point glissé.
+   *
+   * Une polyline par tronçon de même couleur, plus une seule polyline
+   * transparente qui porte survol, infobulle et insertion : le nombre de
+   * couches ne dépend plus de la longueur du trajet.
    */
   draw(geometryGeojson, maxSpeedBySegment, legBoundaries = []) {
     this.clear();
-    const coords = geometryGeojson.coordinates;
+    const coords = geometryGeojson?.coordinates ?? [];
     this._insertInteraction?.setLegBoundaries(legBoundaries);
+    if (coords.length < 2) return;
+    this._coords = coords;
+    this._speeds = maxSpeedBySegment ?? [];
 
-    for (let i = 0; i < coords.length - 1; i++) {
-      const [lon1, lat1] = coords[i];
-      const [lon2, lat2] = coords[i + 1];
-      const speed = maxSpeedBySegment?.[i] ?? null;
-      const line = L.polyline(
-        [
-          [lat1, lon1],
-          [lat2, lon2],
-        ],
-        { color: speedColor(speed), weight: 5, opacity: 0.85 }
-      ).addTo(this._map);
-      if (speed != null) {
-        line.bindTooltip(`${speed} km/h`, { sticky: true });
+    for (const run of groupRunsByColor(coords, this._speeds)) {
+      L.polyline(run.latlngs, { ...LINE_STYLE, color: run.color }).addTo(this._group);
+    }
+
+    const hitLine = L.polyline(
+      coords.map(([lon, lat]) => [lat, lon]),
+      { weight: HIT_WEIGHT, opacity: 0, className: "route-hit" }
+    ).addTo(this._group);
+    this._tooltipEl.textContent = INSERT_HINT;
+    hitLine.bindTooltip(this._tooltipEl, { sticky: true, direction: "top", offset: [0, -10] });
+    hitLine.on("mousemove", (e) => this._scheduleHover(e.latlng));
+    hitLine.on("mouseout", () => {
+      this._cancelHoverFrame();
+      this._insertInteraction?.hoverEnd();
+    });
+    hitLine.on("mousedown", (e) => this._onMouseDown(e));
+    this._hitLine = hitLine;
+
+    this._map.fitBounds(hitLine.getBounds(), { padding: [30, 30] });
+  }
+
+  /** Segment du tracé le plus proche d'une position, et le point
+   * correspondant sur le tracé. */
+  _nearestAt(latlng) {
+    if (!this._projected) {
+      this._projected = this._coords.map(([lon, lat]) => this._map.latLngToLayerPoint([lat, lon]));
+    }
+    const nearest = nearestSegment(this._projected, this._map.latLngToLayerPoint(latlng));
+    if (!nearest) return null;
+    return { segmentIndex: nearest.index, latlng: this._map.layerPointToLatLng([nearest.x, nearest.y]) };
+  }
+
+  /** Limité à un calcul par frame : mousemove peut se déclencher bien plus
+   * souvent que l'écran ne se rafraîchit. */
+  _scheduleHover(latlng) {
+    this._pendingLatLng = latlng;
+    if (this._frame !== null) return;
+    this._frame = requestAnimationFrame(() => {
+      this._frame = null;
+      const nearest = this._hitLine && this._nearestAt(this._pendingLatLng);
+      if (!nearest) return;
+      const speed = this._speeds[nearest.segmentIndex];
+      const text = speed != null ? `${Math.round(speed)} km/h · ${INSERT_HINT.toLowerCase()}` : INSERT_HINT;
+      if (this._tooltipEl.textContent !== text) this._tooltipEl.textContent = text;
+      if (this._insertInteraction?.isEnabled()) {
+        this._insertInteraction.hover(nearest.latlng);
+      } else {
+        this._insertInteraction?.hoverEnd();
       }
-      this._insertInteraction?.attachToSegment(line, i);
-      this._segments.push(line);
-    }
+    });
+  }
 
-    if (coords.length > 0) {
-      this._map.fitBounds(L.latLngBounds(coords.map(([lon, lat]) => [lat, lon])), { padding: [30, 30] });
-    }
+  _cancelHoverFrame() {
+    if (this._frame !== null) cancelAnimationFrame(this._frame);
+    this._frame = null;
+  }
+
+  _onMouseDown(e) {
+    // Bouton principal uniquement : un clic droit sur le tracé ouvre le menu
+    // de création de point d'intérêt, il ne doit pas insérer d'étape. Sans
+    // stopper l'événement, il remonte alors à la carte comme un clic normal
+    // (sélection du départ d'une boucle, dessin d'une zone…).
+    if (!this._insertInteraction?.isEnabled() || e.originalEvent?.button !== 0) return;
+    const nearest = this._nearestAt(e.latlng);
+    if (!nearest) return;
+    this._cancelHoverFrame();
+    this._hitLine.closeTooltip();
+    this._insertInteraction.startDrag(e, nearest.segmentIndex);
   }
 }
