@@ -29,7 +29,7 @@ export function initSpeedLimitController({ store }) {
     if (checkbox.checked) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      store.setState({ speedLimitKmh: parseInputValue(), noSpeedLimit: false }, { silent: false });
+      store.setState({ speedLimitKmh: parseInputValue(), noSpeedLimit: false }, { userChange: true });
     }, DEBOUNCE_MS);
   });
 
@@ -38,11 +38,12 @@ export function initSpeedLimitController({ store }) {
     const noSpeedLimit = checkbox.checked;
     store.setState(
       { speedLimitKmh: noSpeedLimit ? null : parseInputValue(), noSpeedLimit },
-      { silent: false }
+      { userChange: true }
     );
   });
 
-  store.subscribe((state) => {
+  store.subscribe(
+    (state) => {
     // Ne réécrit pas la valeur pendant que l'utilisateur a le focus dessus :
     // une notification de store sans rapport (ex. un recalcul de trajet qui
     // se termine) pourrait sinon écraser une frappe en cours pendant le
@@ -52,5 +53,7 @@ export function initSpeedLimitController({ store }) {
     }
     input.disabled = state.noSpeedLimit;
     checkbox.checked = state.noSpeedLimit;
-  });
+    },
+    { keys: ["speedLimitKmh", "noSpeedLimit"] }
+  );
 }

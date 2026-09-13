@@ -306,6 +306,8 @@ ajuster :
 | `CF_MAX_REQUEST_BODY_BYTES` | `10000000` | Taille maximale d'un corps de requête, refusée en 413 avant sa lecture complète |
 | `CF_LOG_LEVEL` | `INFO` | Niveau des journaux du backend (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
 | `CF_NOMINATIM_URL` | `https://nominatim.openstreetmap.org` | Serveur Nominatim utilisé pour la recherche d'adresse |
+| `CF_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | Serveur de tuiles du fond de carte (autorisé automatiquement par la Content-Security-Policy) |
+| `CF_TILE_ATTRIBUTION` | `&copy; OpenStreetMap contributors` | Attribution affichée pour ce fond de carte |
 
 Sondes de santé du backend : `/api/health/live` (le serveur répond, utilisée
 par le healthcheck Docker), `/api/health/ready` (503 tant que GraphHopper ou
@@ -328,10 +330,18 @@ un segment avec une limite de vitesse signalée > 80 km/h.
 
 ### End-to-end (Playwright)
 
-Nécessite la stack Docker démarrée (`docker compose up -d`, voir
-[Démarrage](#démarrage)) — les tests s'exécutent contre l'application
-réelle (frontend + backend + GraphHopper), sans mocks (à une exception
-près, documentée ci-dessous).
+Nécessite la stack Docker démarrée **avec l'override de test**, qui
+construit le frontend avec les accès internes utilisés par les tests
+(`window.__map`…) — absents des images de production. La suite pilote
+ensuite un vrai navigateur contre l'application réelle (frontend + backend +
+GraphHopper), sans mocks (à une exception près, documentée ci-dessous).
+Avant chaque run, `tests/e2e/global-setup.js` supprime les données de test
+laissées par un run précédent interrompu (trajets « Playwright… », points
+d'intérêt de test), pour que les suites repartent d'une base propre.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+```
 
 ```bash
 cd frontend

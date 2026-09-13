@@ -21,7 +21,7 @@ afterEach(() => {
 
 describe("initDraftAutosave", () => {
   it("sauvegarde une mutation utilisateur après le délai", () => {
-    store.setState({ waypoints: [{ id: 1 }] });
+    store.setState({ waypoints: [{ id: 1 }] }, { userChange: true });
     vi.advanceTimersByTime(DEBOUNCE_MS - 1);
     expect(saved).toHaveLength(0);
     vi.advanceTimersByTime(1);
@@ -30,41 +30,41 @@ describe("initDraftAutosave", () => {
   });
 
   it("écrit l'état courant, pas celui de la mutation (tracé arrivé entre-temps)", () => {
-    store.setState({ waypoints: [{ id: 1 }, { id: 2 }] });
-    store.setState({ computedRoute: { distance_m: 42 } }, { silent: true });
+    store.setState({ waypoints: [{ id: 1 }, { id: 2 }] }, { userChange: true });
+    store.setState({ computedRoute: { distance_m: 42 } });
     vi.advanceTimersByTime(DEBOUNCE_MS);
     expect(saved).toHaveLength(1);
     expect(saved[0].computedRoute).toEqual({ distance_m: 42 });
   });
 
   it("re-sauvegarde un tracé calculé après l'écriture précédente", () => {
-    store.setState({ waypoints: [{ id: 1 }, { id: 2 }] });
+    store.setState({ waypoints: [{ id: 1 }, { id: 2 }] }, { userChange: true });
     vi.advanceTimersByTime(DEBOUNCE_MS);
-    store.setState({ computedRoute: { distance_m: 42 } }, { silent: true });
+    store.setState({ computedRoute: { distance_m: 42 } });
     vi.advanceTimersByTime(DEBOUNCE_MS);
     expect(saved).toHaveLength(2);
     expect(saved[1].computedRoute).toEqual({ distance_m: 42 });
   });
 
   it("ignore les changements silencieux tant qu'aucune mutation n'est en attente", () => {
-    store.setState({ computedRoute: { distance_m: 1 }, editingRouteId: 3 }, { silent: true });
+    store.setState({ computedRoute: { distance_m: 1 }, editingRouteId: 3 });
     vi.advanceTimersByTime(DEBOUNCE_MS * 2);
     expect(saved).toHaveLength(0);
   });
 
   it("ne relance pas la sauvegarde pour une clé silencieuse non suivie", () => {
-    store.setState({ waypoints: [{ id: 1 }] });
+    store.setState({ waypoints: [{ id: 1 }] }, { userChange: true });
     vi.advanceTimersByTime(DEBOUNCE_MS);
-    store.setState({ pendingForcedPoint: { lat: 1, lon: 2 } }, { silent: true });
+    store.setState({ pendingForcedPoint: { lat: 1, lon: 2 } });
     vi.advanceTimersByTime(DEBOUNCE_MS);
     expect(saved).toHaveLength(1);
   });
 
   it("cancel abandonne l'écriture programmée et le brouillon en attente", () => {
-    store.setState({ waypoints: [{ id: 1 }] });
+    store.setState({ waypoints: [{ id: 1 }] }, { userChange: true });
     autosave.cancel();
     vi.advanceTimersByTime(DEBOUNCE_MS);
-    store.setState({ computedRoute: { distance_m: 1 } }, { silent: true });
+    store.setState({ computedRoute: { distance_m: 1 } });
     vi.advanceTimersByTime(DEBOUNCE_MS);
     expect(saved).toHaveLength(0);
   });
@@ -73,7 +73,7 @@ describe("initDraftAutosave", () => {
     autosave.flush();
     expect(saved).toHaveLength(0);
 
-    store.setState({ waypoints: [{ id: 1 }] });
+    store.setState({ waypoints: [{ id: 1 }] }, { userChange: true });
     autosave.flush();
     expect(saved).toHaveLength(1);
     vi.advanceTimersByTime(DEBOUNCE_MS);

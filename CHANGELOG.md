@@ -18,6 +18,11 @@ publie les images Docker correspondantes.
   sondes `/api/health/live` et `/api/health/ready` (#25).
 - CodeQL, Dependabot, analyse Trivy des images, `pip-audit` et `npm audit`
   en CI ; images publiées pour les tags de version, avec provenance et SBOM.
+- En-têtes de sécurité (Content-Security-Policy, nosniff, Referrer-Policy…)
+  et fond de carte configurable (`CF_TILE_URL`, `CF_TILE_ATTRIBUTION`,
+  `GET /api/config`).
+- Vérification de types (JSDoc + TypeScript) des modules frontend `utils`,
+  `state` et `api`, exécutée en CI.
 
 ### Modifié
 
@@ -28,6 +33,12 @@ publie les images Docker correspondantes.
   base épinglées par digest, GraphHopper sur Ubuntu 24.04 (Temurin 21).
 - Journaux Docker avec rotation ; mise à jour des données OSM sans
   interruption pendant le téléchargement, extrait précédent conservé.
+- Frontend : abonnements au store filtrés par clés et mises à jour
+  imbriquées mises en file, drapeau explicite `userChange` à la place de
+  `silent` ; requêtes remplacées annulées (AbortController) ; suppression
+  confirmée dans le bouton lui-même au lieu de `window.confirm` ; accès
+  internes de test absents du build de production ; tuiles sans sous-domaine
+  `{s}`.
 
 ### Corrigé
 
@@ -43,6 +54,10 @@ publie les images Docker correspondantes.
 - Trajet sauvegardé rouvert sans couleurs de vitesse ni distances par étape,
   cache Nominatim non borné et recherches sérialisées (#25).
 - Boutons masqués restés visibles, mise en page mobile (#21).
+- Popups de zones à éviter fermés par la fin d'un calcul, saisie du
+  formulaire de point d'intérêt perdue en cas d'échec, libellés de listes et
+  alternatives inaccessibles au clavier, message d'information annoncé comme
+  une alerte.
 
 ### Sécurité
 

@@ -3,8 +3,6 @@ import { AvoidZoneDrawInteraction } from "../map/avoid-zone-draw-interaction.js"
 import { renderAvoidZoneList } from "../ui/avoid-zone-list.js";
 import { TAB_CHANGE_EVENT } from "../ui/tabs.js";
 
-const TOGGLE_LABEL_OFF = "🚫 Éviter une zone";
-const TOGGLE_LABEL_ON = "🚫 Glisser sur la carte pour dessiner…";
 
 /** Câble la sidebar "Zones à éviter" : dessin au glisser sur la carte,
  * calque, liste, et synchronisation avec le store (avoidZones) pour que
@@ -25,20 +23,25 @@ export function initAvoidZoneController({ map, store, waypointManager, history }
   function addZone(lat, lon, radiusM) {
     pushHistory();
     const zones = [...store.getState().avoidZones, { lat, lon, radiusM }];
-    store.setState({ avoidZones: zones }, { silent: false });
+    store.setState({ avoidZones: zones }, { userChange: true });
   }
 
   function removeZoneAt(index) {
     pushHistory();
     const zones = store.getState().avoidZones.filter((_, i) => i !== index);
-    store.setState({ avoidZones: zones }, { silent: false });
+    store.setState({ avoidZones: zones }, { userChange: true });
   }
 
-  store.subscribe((state) => {
-    layer.render(state.avoidZones);
-    renderAvoidZoneList(state.avoidZones, removeZoneAt);
-    document.getElementById("avoid-zone-list-panel").classList.toggle("hidden", state.avoidZones.length === 0);
-  });
+  // Uniquement quand les zones changent : reconstruire les cercles à chaque
+  // mise à jour (fin d'un calcul, par exemple) fermait leur popup ouvert.
+  store.subscribe(
+    (state) => {
+      layer.render(state.avoidZones);
+      renderAvoidZoneList(state.avoidZones, removeZoneAt);
+      document.getElementById("avoid-zone-list-panel").classList.toggle("hidden", state.avoidZones.length === 0);
+    },
+    { keys: ["avoidZones"] }
+  );
 
   const drawInteraction = new AvoidZoneDrawInteraction(map, addZone, () => {
     const v = parseFloat(radiusInput.value);
@@ -58,7 +61,9 @@ export function initAvoidZoneController({ map, store, waypointManager, history }
     // Même parade que pour le mode "génération de circuit" : désactiver
     // l'ajout au clic tant que le mode dessin est actif.
     waypointManager.setAddOnMapClickEnabled(!active);
-    toggleBtn.textContent = active ? TOGGLE_LABEL_ON : TOGGLE_LABEL_OFF;
+    // Libellé constant : l'état est porté par aria-pressed (un libellé qui
+    // change en plus était annoncé deux fois) et par l'indication visible.
+    document.getElementById("avoid-zone-draw-hint").classList.toggle("hidden", !active);
     toggleBtn.classList.toggle("active", active);
     toggleBtn.setAttribute("aria-pressed", String(active));
   }

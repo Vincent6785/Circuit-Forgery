@@ -85,6 +85,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Vérification de types (modules utils, state, api)
+        run: npm run typecheck
+
       - name: Tests unitaires
         run: npm test
 

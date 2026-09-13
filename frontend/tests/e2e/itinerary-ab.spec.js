@@ -1,17 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, collectPageErrors, mapPointAt, openRouteOptions, openTab } from "./helpers.js";
+import { clickMapAt, collectPageErrors, mapPointAt, openRouteOptions, openTab, setupParisView } from "./helpers.js";
 
 // Points routables à Paris intra-muros, repris des autres suites.
 const A = { lat: 48.8566, lon: 2.3522 };
 const B = { lat: 48.8738, lon: 2.295 };
 const C = { lat: 48.87, lon: 2.36 };
-
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
-  await page.waitForTimeout(300);
-}
 
 const isCompute = (response) => response.url().includes("/api/routes/compute");
 const getWaypoints = (page) => page.evaluate(() => window.__getWaypoints());

@@ -3,6 +3,7 @@
 
 export const UNKNOWN_SPEED_COLOR = "#888888";
 
+/** @param {number | null | undefined} speed */
 export function speedColor(speed) {
   if (speed == null) return UNKNOWN_SPEED_COLOR;
   if (speed <= 50) return "#2e7d32"; // vert
@@ -16,9 +17,16 @@ export function speedColor(speed) {
  * sommets en [lat, lon] (ordre Leaflet), sommets de jonction partagés entre
  * tronçons voisins pour que le tracé reste continu. Une polyline par tronçon
  * au lieu d'une par segment : quelques dizaines de couches au lieu de
- * plusieurs milliers sur un long trajet. */
+ * plusieurs milliers sur un long trajet.
+ *
+ * @param {number[][]} coordinates
+ * @param {(number | null)[] | null | undefined} [maxSpeedBySegment]
+ */
 export function groupRunsByColor(coordinates, maxSpeedBySegment = []) {
+  /** @typedef {{ color: string, latlngs: number[][] }} Run */
+  /** @type {Run[]} */
   const runs = [];
+  /** @type {Run | null} */
   let current = null;
   for (let i = 0; i < coordinates.length - 1; i++) {
     const color = speedColor(maxSpeedBySegment?.[i] ?? null);
@@ -35,8 +43,14 @@ export function groupRunsByColor(coordinates, maxSpeedBySegment = []) {
 
 /** Segment [points[i], points[i + 1]] le plus proche de `p`, dans un repère
  * plan (pixels). Renvoie { index, x, y } où (x, y) est le point le plus
- * proche sur ce segment, ou null s'il n'y a aucun segment. */
+ * proche sur ce segment, ou null s'il n'y a aucun segment.
+ *
+ * @param {Array<{ x: number, y: number }>} points
+ * @param {{ x: number, y: number }} p
+ * @returns {{ index: number, x: number, y: number } | null}
+ */
 export function nearestSegment(points, p) {
+  /** @type {{ index: number, x: number, y: number } | null} */
   let best = null;
   let bestDist = Infinity;
   for (let i = 0; i < points.length - 1; i++) {
@@ -61,7 +75,11 @@ export function nearestSegment(points, p) {
  * coordIndex. legBoundaries[i] est l'index, dans les coordonnées du tracé, du
  * waypoint i (voir backend/app/services/route_enrichment.py). Borné à la
  * dernière paire valide, pour qu'une insertion reste toujours *entre* deux
- * waypoints existants, jamais après l'arrivée. */
+ * waypoints existants, jamais après l'arrivée.
+ *
+ * @param {number[] | null | undefined} legBoundaries
+ * @param {number} coordIndex
+ */
 export function legIndexForCoordIndex(legBoundaries, coordIndex) {
   if (!legBoundaries || legBoundaries.length < 2) return 0;
   let legIndex = 0;

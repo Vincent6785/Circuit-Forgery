@@ -12,7 +12,7 @@ export function initGpxController({ store, waypointManager, waitForRecompute }) 
     try {
       const { waypoints, truncated } = await importGpx(file);
       waypointManager.replaceAll(waypoints);
-      store.setState({ editingRouteId: null }, { silent: true });
+      store.setState({ editingRouteId: null });
       // replaceAll ci-dessus a déclenché le calcul d'itinéraire ; on attend sa
       // fin pour que le bandeau de troncature affiché plus bas ne soit pas
       // écrasé par le hideRouteError()/showRouteError() de ce calcul — sans

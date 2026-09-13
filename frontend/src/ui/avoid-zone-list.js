@@ -14,6 +14,7 @@ export function renderAvoidZoneList(zones, onRemove) {
 
 function _deleteButton(index, onRemove) {
   const delBtn = document.createElement("button");
+  delBtn.type = "button";
   delBtn.textContent = "✕";
   delBtn.title = "Retirer cette zone";
   delBtn.setAttribute("aria-label", "Retirer cette zone à éviter");

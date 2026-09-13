@@ -68,6 +68,6 @@ export function initItineraryController({ map, store, waypointManager }) {
     input.title = value;
   }
 
-  store.subscribe(() => fields.forEach((field) => syncField(field)));
+  store.subscribe(() => fields.forEach((field) => syncField(field)), { keys: ["waypoints"] });
   fields.forEach((field) => syncField(field));
 }

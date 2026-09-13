@@ -5,13 +5,13 @@ import { createMap } from "./map/map.js";
 import { WaypointManager } from "./map/markers.js";
 import { RouteLayer } from "./map/route-layer.js";
 import { RouteInsertInteraction } from "./map/route-insert-interaction.js";
-import { showRouteInfo, showRouteError, hideRouteError } from "./ui/sidebar.js";
+import { showRouteInfo, hideRouteError } from "./ui/sidebar.js";
 import { initTabs } from "./ui/tabs.js";
 import { initRouteOptionsSummary } from "./ui/route-options-summary.js";
 import { POILayer } from "./map/poi-layer.js";
 import { openPoiCreationPopup } from "./ui/poi-form-popup.js";
 import { refreshPoiList } from "./ui/poi-list.js";
-import { createPOI } from "./api/poi.js";
+import { createPOI, getClientConfig } from "./api/poi.js";
 import { initDraftAutosave } from "./state/draft-autosave.js";
 import { loadDraft } from "./state/draft-storage.js";
 import { initRouteController } from "./controllers/route-controller.js";
@@ -25,8 +25,12 @@ import { indexForRouteDrop } from "./utils/itinerary.js";
 
 initTabs();
 
-const map = createMap("map");
-window.__map = map; // exposé uniquement pour Playwright (latLngToContainerPoint pour simuler des clics)
+const { map, applyTileConfig } = createMap("map");
+// Serveur de tuiles configuré côté backend : appliqué dès réception, sans
+// retarder l'affichage (le fond par défaut s'affiche en attendant).
+getClientConfig()
+  .then(applyTileConfig)
+  .catch((err) => console.warn("Configuration du fond de carte indisponible, fond par défaut conservé :", err));
 
 const insertInteraction = new RouteInsertInteraction(
   map,
@@ -53,12 +57,18 @@ const store = createStore({
 
 const history = createHistory();
 const waypointManager = new WaypointManager(map, store, history);
-window.__getWaypoints = () => waypointManager.getPoints(); // exposé uniquement pour Playwright
-window.__getAvoidZones = () => store.getState().avoidZones; // exposé uniquement pour Playwright
-window.__getSpeedLimit = () => ({
-  speedLimitKmh: store.getState().speedLimitKmh,
-  noSpeedLimit: store.getState().noSpeedLimit,
-}); // exposé uniquement pour Playwright
+// Accès internes pour les tests Playwright uniquement : absents du build de
+// production (VITE_E2E_HOOKS n'est défini que pour la stack de test, cf.
+// docker-compose.e2e.yml), et retirés du bundle par Vite dans ce cas.
+if (import.meta.env.DEV || import.meta.env.VITE_E2E_HOOKS === "true") {
+  window.__map = map;
+  window.__getWaypoints = () => waypointManager.getPoints();
+  window.__getAvoidZones = () => store.getState().avoidZones;
+  window.__getSpeedLimit = () => ({
+    speedLimitKmh: store.getState().speedLimitKmh,
+    noSpeedLimit: store.getState().noSpeedLimit,
+  });
+}
 
 const draftAutosave = initDraftAutosave(store);
 // Une modification faite juste avant de fermer l'onglet (dans le délai de
@@ -89,14 +99,11 @@ function refreshPoi() {
 }
 
 map.on("contextmenu", (e) => {
+  // Le formulaire affiche lui-même l'erreur et reste ouvert si l'enregistrement échoue.
   openPoiCreationPopup(map, e.latlng, async (poi) => {
-    try {
-      await createPOI(poi);
-      hideRouteError();
-      refreshPoi();
-    } catch (err) {
-      showRouteError(err.message);
-    }
+    await createPOI(poi);
+    hideRouteError();
+    refreshPoi();
   });
 });
 
@@ -114,8 +121,7 @@ if (draft && draft.waypoints?.length > 0) {
       pendingForcedPoint: draft.pendingForcedPoint ?? null,
       roundTripVariant: draft.roundTripVariant ?? null,
       editingRouteId: draft.editingRouteId ?? null,
-    },
-    { silent: true }
+    }
   );
   // Un tracé enregistré pour un autre nombre de points (brouillon écrit par
   // une version antérieure, qui sauvegardait le tracé précédent) est
@@ -128,7 +134,7 @@ if (draft && draft.waypoints?.length > 0) {
       draft.computedRoute.leg_boundaries
     );
     showRouteInfo(draft.computedRoute.distance_m, draft.computedRoute.duration_s);
-    store.setState({ computedRoute: draft.computedRoute }, { silent: true });
+    store.setState({ computedRoute: draft.computedRoute });
   } else if (draft.waypoints.length >= 2) {
     recomputeAndRender(draft.waypoints);
   }

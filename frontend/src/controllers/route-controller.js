@@ -5,6 +5,7 @@ import { refreshSavedRoutesList } from "../ui/saved-routes-list.js";
 import { renderWaypointList } from "../ui/waypoint-list.js";
 import { clearDraft } from "../state/draft-storage.js";
 import { switchTab } from "../ui/tabs.js";
+import { createLatestRequest } from "../api/latest-request.js";
 import { isSameRoute } from "../utils/route-match.js";
 
 /**
@@ -13,10 +14,9 @@ import { isSameRoute } from "../utils/route-match.js";
  * carte déjà construits par main.js au lieu de les recréer ici.
  */
 export function initRouteController({ store, waypointManager, routeLayer, draftAutosave }) {
-  // Garde-fou "dernier appel gagne" : deux mutations rapprochées peuvent
-  // lancer deux calculs concurrents — seul le plus récent des deux doit être
-  // autorisé à mettre à jour le DOM à sa résolution.
-  let recomputeSeq = 0;
+  // "Dernier appel gagne" : une mutation qui arrive pendant un calcul annule
+  // la requête précédente, dont le résultat ne peut plus mettre à jour le DOM.
+  const routeRequest = createLatestRequest();
   let currentComputation = Promise.resolve();
   // Même principe pour l'ouverture d'un trajet sauvegardé (chargement du
   // détail puis recalcul d'enrichissement) : seule la dernière ouverture
@@ -24,30 +24,35 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
   let loadSeq = 0;
 
   function recomputeAndRender(waypoints) {
-    currentComputation = computeAndRender(waypoints, ++recomputeSeq);
+    currentComputation = computeAndRender(waypoints);
     return currentComputation;
   }
 
-  async function computeAndRender(waypoints, seq) {
+  async function computeAndRender(waypoints) {
     if (waypoints.length < 2) {
+      routeRequest.cancel();
       routeLayer.clear();
       hideRouteInfo();
       hideRouteError();
-      store.setState({ computedRoute: null }, { silent: true });
+      store.setState({ computedRoute: null });
       return;
     }
+    const { avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
+    let outcome;
     try {
-      const { avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
-      const result = await computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit);
-      if (seq !== recomputeSeq) return;
-      hideRouteError();
-      routeLayer.draw(result.geometry_geojson, result.max_speed_by_segment, result.leg_boundaries);
-      showRouteInfo(result.distance_m, result.duration_s);
-      store.setState({ computedRoute: result }, { silent: true });
+      outcome = await routeRequest.run((signal) =>
+        computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit, { signal })
+      );
     } catch (err) {
-      if (seq !== recomputeSeq) return;
       showRouteError(err.message);
+      return;
     }
+    if (outcome.stale) return;
+    const result = outcome.value;
+    hideRouteError();
+    routeLayer.draw(result.geometry_geojson, result.max_speed_by_segment, result.leg_boundaries);
+    showRouteInfo(result.distance_m, result.duration_s);
+    store.setState({ computedRoute: result });
   }
 
   /** Attend la fin du calcul déclenché par la dernière mutation : l'import
@@ -63,22 +68,21 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
   }
 
   store.subscribe((state, meta) => {
-    if (meta.silent) return;
+    if (!meta.userChange) return;
     recomputeAndRender(state.waypoints);
   });
 
-  let renderedWaypoints = null;
-  let renderedRoute = null;
+  // L'historique annuler/rétablir change avec les points et les zones.
+  store.subscribe(
+    () => {
+      document.getElementById("undo-waypoint-btn").disabled = !waypointManager.canUndo();
+      document.getElementById("redo-waypoint-btn").disabled = !waypointManager.canRedo();
+    },
+    { keys: ["waypoints", "avoidZones"] }
+  );
+
+  // La liste ne dépend que des points et du tracé.
   store.subscribe((state) => {
-    document.getElementById("undo-waypoint-btn").disabled = !waypointManager.canUndo();
-    document.getElementById("redo-waypoint-btn").disabled = !waypointManager.canRedo();
-
-    // La liste ne dépend que des points et du tracé : la reconstruire à
-    // chaque notification (vitesse, zones…) coûtait inutilement.
-    if (state.waypoints === renderedWaypoints && state.computedRoute === renderedRoute) return;
-    renderedWaypoints = state.waypoints;
-    renderedRoute = state.computedRoute;
-
     const wp = state.waypoints;
     document.getElementById("waypoint-list-panel").classList.toggle("hidden", wp.length === 0);
     renderWaypointList(wp, waypointManager, state.computedRoute);
@@ -88,7 +92,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     const alreadyClosed = wp.length >= 2 && first.lat === last.lat && first.lon === last.lon;
     document.getElementById("close-loop-btn").disabled = wp.length < 2 || alreadyClosed;
     document.getElementById("reverse-route-btn").disabled = wp.length < 2;
-  });
+  }, { keys: ["waypoints", "computedRoute"] });
 
   document.getElementById("undo-waypoint-btn").addEventListener("click", () => waypointManager.undo());
   document.getElementById("redo-waypoint-btn").addEventListener("click", () => waypointManager.redo());
@@ -104,13 +108,16 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     waypointManager.reverseAll();
   });
 
-  store.subscribe((state) => {
-    const editing = state.editingRouteId !== null;
-    document.getElementById("save-route-btn").classList.toggle("hidden", editing);
-    document.getElementById("save-route-name-input").classList.toggle("hidden", editing);
-    document.getElementById("update-route-btn").classList.toggle("hidden", !editing);
-    document.getElementById("cancel-edit-btn").classList.toggle("hidden", !editing);
-  });
+  store.subscribe(
+    (state) => {
+      const editing = state.editingRouteId !== null;
+      document.getElementById("save-route-btn").classList.toggle("hidden", editing);
+      document.getElementById("save-route-name-input").classList.toggle("hidden", editing);
+      document.getElementById("update-route-btn").classList.toggle("hidden", !editing);
+      document.getElementById("cancel-edit-btn").classList.toggle("hidden", !editing);
+    },
+    { keys: ["editingRouteId"] }
+  );
 
   /** Remet le trajet courant à zéro : partagé par "Effacer le trajet" et
    * "Annuler" (édition) — corps strictement identique, dont un champ oublié
@@ -126,8 +133,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         noSpeedLimit: false,
         pendingForcedPoint: null,
         roundTripVariant: null,
-      },
-      { silent: true }
+      }
     );
     document.getElementById("route-description-input").value = "";
     discardDraft();
@@ -191,7 +197,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         no_speed_limit: noSpeedLimit,
       });
       hideRouteError();
-      store.setState({ editingRouteId: null }, { silent: true });
+      store.setState({ editingRouteId: null });
       refreshSavedRoutes();
       discardDraft();
     } catch (err) {
@@ -212,7 +218,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
    * peuvent être sauvegardés comme nouveau trajet, au lieu d'échouer en 404
    * à chaque "Enregistrer les modifications". */
   function leaveEditModeForDeletedRoute() {
-    store.setState({ editingRouteId: null }, { silent: true });
+    store.setState({ editingRouteId: null });
     showBanner(
       "Le trajet en cours de modification n'existe plus : ses points restent affichés, vous pouvez les sauvegarder comme nouveau trajet.",
       { type: "info" }
@@ -254,8 +260,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         noSpeedLimit: route.no_speed_limit || false,
         pendingForcedPoint: null,
         roundTripVariant: null,
-      },
-      { silent: true }
+      }
     );
   }
 
@@ -296,7 +301,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     if (!isSameRoute(route.distance_m, result.distance_m)) return;
     routeLayer.draw(result.geometry_geojson, result.max_speed_by_segment, result.leg_boundaries);
     showRouteInfo(result.distance_m, result.duration_s);
-    store.setState({ computedRoute: result }, { silent: true });
+    store.setState({ computedRoute: result });
   }
 
   function loadSavedRoute(summary) {

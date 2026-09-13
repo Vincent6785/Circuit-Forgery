@@ -1,12 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt, openTab } from "./helpers.js";
-
-async function setupParisView(page) {
-  await page.goto("/");
-  await expect(page.locator("#map")).toBeVisible();
-  await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
-  await page.waitForTimeout(300);
-}
+import { clickMapAt, openTab, setupParisView } from "./helpers.js";
 
 test("dupliquer un trajet sauvegardé crée une nouvelle entrée sans modifier l'original", async ({
   page,

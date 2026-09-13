@@ -79,18 +79,18 @@ export function initRoundTripController({ map, store, waypointManager, waitForRe
     removeLink.textContent = "✕ Retirer";
     removeLink.addEventListener("click", (e) => {
       e.preventDefault();
-      store.setState({ pendingForcedPoint: null }, { silent: true });
+      store.setState({ pendingForcedPoint: null });
       map.closePopup();
     });
     container.appendChild(removeLink);
     forcedPointMarker.bindPopup(container);
   }
 
-  store.subscribe((state) => renderForcedPoint(state.pendingForcedPoint));
+  store.subscribe((state) => renderForcedPoint(state.pendingForcedPoint), { keys: ["pendingForcedPoint"] });
   function syncVariantButton() {
     variantBtn.disabled = generating || !store.getState().roundTripVariant;
   }
-  store.subscribe(syncVariantButton);
+  store.subscribe(syncVariantButton, { keys: ["roundTripVariant"] });
 
   async function generateFrom(lat, lon, distanceM, seed) {
     generating = true;
@@ -117,7 +117,7 @@ export function initRoundTripController({ map, store, waypointManager, waitForRe
         ];
       }
       waypointManager.replaceAll(waypoints);
-      store.setState({ editingRouteId: null }, { silent: true });
+      store.setState({ editingRouteId: null });
       // replaceAll ci-dessus a déclenché le calcul d'itinéraire ; on attend sa
       // fin pour que le bandeau de simplification affiché plus bas ne soit
       // pas écrasé par ce calcul — même course que pour l'import GPX (voir
@@ -129,7 +129,7 @@ export function initRoundTripController({ map, store, waypointManager, waitForRe
           { type: "info" }
         );
       }
-      store.setState({ roundTripVariant: { start: { lat, lon }, distanceM } }, { silent: true });
+      store.setState({ roundTripVariant: { start: { lat, lon }, distanceM } });
     } catch (err) {
       showRouteError(err.message);
     } finally {
@@ -166,13 +166,13 @@ export function initRoundTripController({ map, store, waypointManager, waitForRe
     if (mode === "start") {
       generateFrom(e.latlng.lat, e.latlng.lng, pendingDistanceM);
     } else {
-      store.setState({ pendingForcedPoint: { lat: e.latlng.lat, lon: e.latlng.lng } }, { silent: true });
+      store.setState({ pendingForcedPoint: { lat: e.latlng.lat, lon: e.latlng.lng } });
     }
   });
 
   cancelBtn.addEventListener("click", () => stopPicking());
   forcedPointClearBtn.addEventListener("click", () => {
-    store.setState({ pendingForcedPoint: null }, { silent: true });
+    store.setState({ pendingForcedPoint: null });
   });
 
   // Volontairement sans garde anti-frappe-dans-un-champ (contrairement à
