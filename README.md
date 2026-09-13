@@ -34,14 +34,26 @@ d'attribution — distincte de la licence du code.
 
 ### Construire un trajet
 
-- **Ajout de points** : clic gauche sur la carte pour poser un point de
-  départ, une étape ou une arrivée ; l'itinéraire (filtré > 80 km/h) est
-  recalculé automatiquement à chaque changement.
-- **Édition des waypoints** : liste réordonnable dans la sidebar
-  (glisser-déposer ou boutons ▲▼, utilisables au clavier/tactile),
-  suppression d'un point précis, sélection d'un marqueur sur la carte +
-  touche Suppr, insertion d'un point en glissant directement sur le tracé
-  affiché entre deux waypoints existants. Chaque point est aussi
+- **Interface en onglets** : *Itinéraire* (trajet A → B et ses étapes),
+  *Boucle* (circuit généré) et *Mes trajets* (trajets sauvegardés, points
+  d'intérêt). Les options (limite de vitesse, zones à éviter, repliées
+  derrière un résumé d'une ligne) et la liste des points sont partagées
+  entre Itinéraire et Boucle ; le résumé du trajet (distance, durée,
+  sauvegarde) reste visible en bas de la sidebar quel que soit l'onglet.
+- **Départ, arrivée, étapes** : champs *Départ* (A) et *Arrivée* (B) avec
+  recherche d'adresse, plus un champ *Ajouter une étape*. Sur la carte, un
+  clic pose le départ, puis l'arrivée, puis insère chaque nouveau point
+  comme étape là où il allonge le moins le trajet — l'arrivée reste
+  l'arrivée ; Maj + clic prolonge au contraire le trajet (le point devient
+  la nouvelle arrivée). L'itinéraire (filtré > 80 km/h) est recalculé
+  automatiquement à chaque changement.
+- **Édition des waypoints** : marqueurs A, B et étapes numérotées,
+  déplaçables par glisser-déposer ; suppression par clic droit sur un
+  marqueur (ou sélection + touche Suppr) ; insertion d'une étape en glissant
+  le tracé (une poignée apparaît au survol, avec la vitesse du tronçon).
+  Liste réordonnable dans la sidebar (glisser-déposer ou boutons ▲▼,
+  utilisables au clavier/tactile), avec suppression d'un point précis.
+  Chaque point est aussi
   **éditable finement** (clic sur son libellé dans la liste) : renommage et
   coordonnées exactes (lat/lon), avec la distance depuis l'étape précédente
   affichée à côté.
@@ -110,8 +122,9 @@ d'attribution — distincte de la licence du code.
 
 ### Autour de la carte
 
-- **Recherche d'adresse** : géocodage via Nominatim (OpenStreetMap), un
-  clic sur un résultat ajoute le point au trajet.
+- **Recherche d'adresse** : géocodage via Nominatim (OpenStreetMap) dans
+  les champs Départ, Arrivée et Étape, suggestions navigables au clavier
+  (↑ ↓ Entrée Échap).
 - **Points d'intérêt** : ajout par clic droit sur la carte (nom, catégorie,
   notes), icônes par catégorie, liste dédiée dans la sidebar, suppression
   avec confirmation.
@@ -313,9 +326,23 @@ Suites dans `frontend/tests/e2e/` (une par fonctionnalité) : navigation et
 sauvegarde d'un trajet, édition des waypoints, précision (renommage,
 coordonnées), annuler/rétablir, circuits en boucle, zones à éviter, limite
 de vitesse, alternatives, duplication, import/export GPX, points d'intérêt,
-recherche d'adresse, brouillon persistant, gestion des erreurs de routage.
+recherche d'adresse, brouillon persistant, gestion des erreurs de routage,
+itinéraire A → B (marqueurs, glisser-déposer sur la carte, onglets).
 `address-search.spec.js` mocke `/api/geocode` — seule exception à la règle
 "pas de mocks", Nominatim étant un service tiers à rate-limit strict.
+
+### Tests unitaires frontend
+
+```bash
+cd frontend
+npm install
+npm test
+```
+
+Vitest, sans navigateur ni backend, sur la logique pure extraite de
+l'interface : règle d'insertion des étapes, champs Départ/Arrivée,
+découpage et survol du tracé, onglets, résumé des options. Exécutés en CI
+avec le lint.
 
 ### Lint frontend
 

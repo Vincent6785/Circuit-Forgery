@@ -1,3 +1,14 @@
+/* Couleurs des rôles de waypoint : mêmes valeurs que map/waypoint-role.js. */
+:root {
+  --color-start: #2e7d32;
+  --color-end: #c62828;
+  --color-step: #1565c0;
+  --color-accent: #1565c0;
+  --color-border: #ddd;
+  --color-muted: #555;
+  --sidebar-bg: #f7f7f5;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -12,35 +23,101 @@ html, body, #app {
   display: flex;
 }
 
+/* Sidebar : en-tête et onglets fixes, contenu défilant, pied (résumé du
+   trajet et messages) toujours visible quel que soit l'onglet. */
 #sidebar {
-  width: 320px;
+  width: 360px;
   flex-shrink: 0;
-  padding: 1rem;
-  overflow-y: auto;
-  background: #f7f7f5;
-  border-right: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--color-border);
 }
 
-#sidebar h1 {
-  font-size: 1.2rem;
+.sidebar-header {
+  padding: 0.75rem 1rem 0;
+  background: white;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-header h1 {
+  font-size: 1.1rem;
   margin: 0 0 0.5rem;
+}
+
+.tabs {
+  display: flex;
+}
+
+.tab {
+  flex: 1;
+  padding: 0.55rem 0.25rem;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: #222;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 1rem 1rem;
+}
+
+.sidebar-footer {
+  flex-shrink: 0;
+  max-height: 45%;
+  overflow-y: auto;
+  padding: 0 1rem 0.75rem;
+  background: var(--sidebar-bg);
+  border-top: 1px solid var(--color-border);
+}
+
+/* Ni trajet calculé ni message : pas de bandeau vide. */
+.sidebar-footer:not(:has(> :not(.hidden))) {
+  display: none;
 }
 
 .hint {
   font-size: 0.85rem;
-  color: #555;
+  color: var(--color-muted);
 }
 
 .panel {
   margin-top: 1rem;
   padding: 0.75rem;
   background: white;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
 }
 
+/* !important : classe utilitaire qui doit l'emporter sur toute règle
+   d'affichage plus spécifique — sans ça, ".panel button { display: block }"
+   laissait visibles des boutons masqués (Enregistrer les modifications,
+   alternatives…). */
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .panel.error {
@@ -60,6 +137,11 @@ html, body, #app {
 .panel h2 {
   font-size: 0.95rem;
   margin: 0 0 0.5rem;
+}
+
+.panel h3 {
+  font-size: 0.9rem;
+  margin: 1rem 0 0.25rem;
 }
 
 .panel button,
@@ -97,6 +179,150 @@ html, body, #app {
   margin: 0;
   cursor: pointer;
 }
+
+kbd {
+  font: inherit;
+  font-size: 0.8em;
+  padding: 0 0.3em;
+  background: white;
+  border: 1px solid #bbb;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}
+
+/* --- Onglet Itinéraire : champs Départ / Arrivée / Étape --- */
+
+.itinerary-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.itinerary-field + .itinerary-field {
+  margin-top: 0.5rem;
+}
+
+.itinerary-badge {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--badge-color);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.itinerary-badge.start {
+  --badge-color: var(--color-start);
+}
+
+.itinerary-badge.end {
+  --badge-color: var(--color-end);
+}
+
+.itinerary-badge.step {
+  --badge-color: var(--color-step);
+}
+
+.combobox {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.panel .combobox input[type="text"] {
+  margin-top: 0;
+  padding: 0.45rem 0.5rem;
+  text-overflow: ellipsis;
+}
+
+.panel .combobox input:disabled {
+  background: #f0f0f0;
+  cursor: not-allowed;
+}
+
+.combobox-results {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.combobox-results:empty {
+  display: none;
+}
+
+.combobox-results li {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid #eee;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.combobox-results li:last-child {
+  border-bottom: none;
+}
+
+.combobox-results li:hover,
+.combobox-results li[aria-selected="true"] {
+  background: #e7f3ff;
+}
+
+.help {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.help summary {
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.help ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.help li + li {
+  margin-top: 0.25rem;
+}
+
+/* --- Options du trajet (panneau repliable) --- */
+
+.options-panel summary {
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.options-summary {
+  float: right;
+  margin-top: 0.1rem;
+  font-size: 0.8rem;
+  font-weight: normal;
+  color: var(--color-muted);
+}
+
+.subpanel {
+  margin-top: 0.75rem;
+}
+
+/* --- Listes --- */
 
 #saved-routes-list,
 #poi-list,
@@ -173,6 +399,10 @@ html, body, #app {
   padding: 0 0.2rem;
 }
 
+#clear-route-btn {
+  margin-top: 1rem;
+}
+
 .waypoint-list-actions {
   display: flex;
   gap: 0.5rem;
@@ -203,10 +433,16 @@ html, body, #app {
 }
 
 .waypoint-dot {
-  width: 10px;
-  height: 10px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
   border: 1px solid white;
   box-shadow: 0 0 1px rgba(0, 0, 0, 0.6);
 }
@@ -259,30 +495,34 @@ html, body, #app {
   opacity: 0.3;
 }
 
-#address-search-input {
-  width: 100%;
-  padding: 0.4rem;
-  font: inherit;
-  box-sizing: border-box;
+/* --- Carte --- */
+
+.wp-pin {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pin-color);
+  color: white;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  font: 700 12px/1 system-ui, sans-serif;
+  cursor: grab;
+  user-select: none;
 }
 
-#address-search-results {
-  list-style: none;
-  margin: 0.4rem 0 0;
-  padding: 0;
-  max-height: 200px;
-  overflow-y: auto;
+.wp-pin.selected {
+  box-shadow: 0 0 0 3px #f9a825, 0 1px 4px rgba(0, 0, 0, 0.55);
 }
 
-#address-search-results li {
-  padding: 0.4rem 0.2rem;
-  border-bottom: 1px solid #eee;
-  cursor: pointer;
-  font-size: 0.85rem;
+.leaflet-dragging .wp-pin {
+  cursor: grabbing;
 }
 
-#address-search-results li:hover {
-  background: #f0f0f0;
+.route-hit.leaflet-interactive {
+  cursor: grab;
 }
 
 .poi-form-popup {
@@ -310,8 +550,8 @@ html, body, #app {
   flex: 1;
 }
 
-/* Écrans étroits (téléphone) : la disposition côte à côte (sidebar 320px
- * fixe + carte) ne tient pas sur un viewport mobile. On empile alors
+/* Écrans étroits (téléphone) : la disposition côte à côte (sidebar fixe +
+ * carte) ne tient pas sur un viewport mobile. On empile alors
  * verticalement, avec la carte sur une hauteur fixe utilisable plutôt que
  * flex:1. */
 @media (max-width: 768px) {
@@ -321,15 +561,18 @@ html, body, #app {
     min-height: 100%;
   }
 
+  /* Hauteur définie (et non max-height) : sans elle, le max-height en
+     pourcentage du pied de sidebar ne se résout pas, et le résumé du trajet
+     écrase tout le contenu des onglets. */
   #sidebar {
     width: 100%;
-    max-height: 50vh;
+    height: 55vh;
     border-right: none;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--color-border);
   }
 
   #map {
     flex: none;
-    height: 50vh;
+    height: 45vh;
   }
 }

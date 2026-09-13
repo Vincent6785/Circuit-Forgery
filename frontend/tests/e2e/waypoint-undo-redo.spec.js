@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt } from "./helpers.js";
+import { clickMapAt, openRouteOptions } from "./helpers.js";
 
 async function setupParisView(page) {
   await page.goto("/");
@@ -81,6 +81,7 @@ test("Ctrl+Z annule l'ajout d'une zone à éviter comme une mutation de waypoint
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#undo-waypoint-btn")).toBeEnabled();
 
+  await openRouteOptions(page);
   await page.locator("#avoid-zone-toggle-btn").click();
   await dragZone(page, 48.865, 2.325, 48.868, 2.328);
   await expect(page.locator("#avoid-zone-list li")).toHaveCount(1);
@@ -101,6 +102,7 @@ test("annuler une mutation de waypoint après une zone restaure aussi la zone (h
   await clickMapAt(page, 48.8566, 2.3522);
   await clickMapAt(page, 48.8738, 2.295);
 
+  await openRouteOptions(page);
   await page.locator("#avoid-zone-toggle-btn").click();
   await dragZone(page, 48.865, 2.325, 48.868, 2.328);
   await expect(page.locator("#avoid-zone-list li")).toHaveCount(1);

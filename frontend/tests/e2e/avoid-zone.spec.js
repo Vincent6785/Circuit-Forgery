@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt } from "./helpers.js";
+import { clickMapAt, openRouteOptions, openTab } from "./helpers.js";
 
 async function setupParisView(page) {
   await page.goto("/");
   await expect(page.locator("#map")).toBeVisible();
   await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
   await page.waitForTimeout(300);
+  await openRouteOptions(page);
 }
 
 async function dragZone(page, centerLat, centerLon, edgeLat, edgeLon) {
@@ -94,6 +95,7 @@ test("une zone à éviter survit à la sauvegarde et au rechargement d'un trajet
   const name = "Trajet Playwright Avoid Zone";
   await page.fill("#save-route-name-input", name);
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   await expect(page.locator("#saved-routes-list li", { hasText: name })).toBeVisible();
 
   const routes = await request.get("/api/routes").then((r) => r.json());
@@ -102,6 +104,7 @@ test("une zone à éviter survit à la sauvegarde et au rechargement d'un trajet
 
   // Rouvrir ce trajet en édition doit restaurer la zone dans l'UI.
   await page.reload();
+  await openTab(page, "saved");
   await page
     .locator("#saved-routes-list li", { hasText: name })
     .locator("button", { hasText: "✎" })

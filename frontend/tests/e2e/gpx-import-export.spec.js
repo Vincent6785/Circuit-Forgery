@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
-import { clickMapAt, collectPageErrors } from "./helpers.js";
+import { clickMapAt, collectPageErrors, openTab } from "./helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = path.join(__dirname, "fixtures", "sample.gpx");
@@ -43,6 +43,7 @@ test("export GPX : le fichier téléchargé contient les waypoints du trajet sau
 
   await page.fill("#save-route-name-input", ROUTE_NAME);
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   const savedItem = page.locator("#saved-routes-list li", { hasText: ROUTE_NAME });
   await expect(savedItem).toBeVisible();
 

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt } from "./helpers.js";
+import { clickMapAt, openRouteOptions } from "./helpers.js";
 
 async function setupParisView(page) {
   await page.goto("/");
@@ -67,6 +67,7 @@ test("le bouton alternatives se désactive avec une zone à éviter active", asy
   await clickMapAt(page, 48.8738, 2.295);
   await expect(page.locator("#show-alternatives-btn")).toBeEnabled();
 
+  await openRouteOptions(page);
   await page.locator("#avoid-zone-toggle-btn").click();
   await dragZone(page, 48.865, 2.325, 48.868, 2.328);
   await page.waitForTimeout(300);

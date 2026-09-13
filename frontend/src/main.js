@@ -6,7 +6,8 @@ import { WaypointManager } from "./map/markers.js";
 import { RouteLayer } from "./map/route-layer.js";
 import { RouteInsertInteraction } from "./map/route-insert-interaction.js";
 import { showRouteInfo, showRouteError, hideRouteError } from "./ui/sidebar.js";
-import { initAddressSearch } from "./ui/address-search.js";
+import { initTabs } from "./ui/tabs.js";
+import { initRouteOptionsSummary } from "./ui/route-options-summary.js";
 import { POILayer } from "./map/poi-layer.js";
 import { openPoiCreationPopup } from "./ui/poi-form-popup.js";
 import { refreshPoiList } from "./ui/poi-list.js";
@@ -14,22 +15,33 @@ import { createPOI } from "./api/poi.js";
 import { initDraftAutosave } from "./state/draft-autosave.js";
 import { loadDraft } from "./state/draft-storage.js";
 import { initRouteController } from "./controllers/route-controller.js";
+import { initItineraryController } from "./controllers/itinerary-controller.js";
 import { initGpxController } from "./controllers/gpx-controller.js";
 import { initRoundTripController } from "./controllers/round-trip-controller.js";
 import { initAvoidZoneController } from "./controllers/avoid-zone-controller.js";
 import { initSpeedLimitController } from "./controllers/speed-limit-controller.js";
 import { initRouteAlternatives } from "./ui/route-alternatives.js";
+import { indexForRouteDrop } from "./utils/itinerary.js";
+
+initTabs();
 
 const map = createMap("map");
 window.__map = map; // exposé uniquement pour Playwright (latLngToContainerPoint pour simuler des clics)
 
-const insertInteraction = new RouteInsertInteraction(map, (legIndex, lat, lon) => {
-  waypointManager.insertPointAt(legIndex + 1, lat, lon);
-});
+const insertInteraction = new RouteInsertInteraction(
+  map,
+  (segmentIndex, legBoundaries, lat, lon) => {
+    const index = indexForRouteDrop(waypointManager.getPoints(), legBoundaries, segmentIndex, { lat, lon });
+    waypointManager.insertPointAt(index, lat, lon);
+  },
+  // Suspendue, comme l'ajout au clic, pendant un autre mode "prochain clic =
+  // …" (génération de boucle, dessin de zone).
+  { isEnabled: () => waypointManager.isAddOnMapClickEnabled() }
+);
 const routeLayer = new RouteLayer(map, insertInteraction);
 
 const store = createStore({
-  waypoints: [], // liste de {id, lat, lon}
+  waypoints: [], // liste de {id, lat, lon, label}
   computedRoute: null, // ComputeRouteResponse, ou null tant qu'aucun trajet n'est calculé
   editingRouteId: null, // id du trajet sauvegardé en cours d'édition, ou null hors édition
   avoidZones: [], // liste de {lat, lon, radiusM}
@@ -51,16 +63,13 @@ window.__getSpeedLimit = () => ({
 initDraftAutosave(store);
 
 const { recomputeAndRender } = initRouteController({ store, waypointManager, routeLayer });
+initItineraryController({ map, store, waypointManager });
 initGpxController({ store, waypointManager, recomputeAndRender });
 initRoundTripController({ map, store, waypointManager, recomputeAndRender });
 initAvoidZoneController({ map, store, waypointManager, history });
 initSpeedLimitController({ store });
+initRouteOptionsSummary(store);
 initRouteAlternatives({ store, routeLayer });
-
-initAddressSearch((lat, lon) => {
-  map.setView([lat, lon], 14);
-  waypointManager.addPoint(lat, lon);
-});
 
 const poiLayer = new POILayer(map);
 

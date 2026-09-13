@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { clickMapAt } from "./helpers.js";
+import { clickMapAt, openRouteOptions, openTab } from "./helpers.js";
 
 async function setupParisView(page) {
   await page.goto("/");
   await expect(page.locator("#map")).toBeVisible();
   await page.evaluate(() => window.__map.setView([48.865, 2.323], 13, { animate: false }));
   await page.waitForTimeout(300);
+  await openRouteOptions(page);
 }
 
 // Le Havre / Honfleur, de part et d'autre du Pont de Normandie (max_speed > 80,
@@ -25,6 +26,7 @@ async function setupNormandyView(page) {
   await expect(page.locator("#map")).toBeVisible();
   await page.evaluate(() => window.__map.setView([49.456, 0.17], 11, { animate: false }));
   await page.waitForTimeout(300);
+  await openRouteOptions(page);
 }
 
 test("abaisser la limite de vitesse resserre le filtre appliqué au trajet", async ({ page, request }) => {
@@ -62,6 +64,7 @@ test("générer un circuit en boucle avec un seuil de vitesse resserré actif ne
   await page.fill("#speed-limit-input", "50");
   await page.waitForTimeout(500);
 
+  await openTab(page, "loop");
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
   await clickMapAt(page, 48.8566, 2.3522);
@@ -136,6 +139,7 @@ test("un réglage de vitesse personnalisé survit à la sauvegarde et au recharg
   const name = "Trajet Playwright Speed Limit";
   await page.fill("#save-route-name-input", name);
   await page.locator("#save-route-btn").click();
+  await openTab(page, "saved");
   await expect(page.locator("#saved-routes-list li", { hasText: name })).toBeVisible();
 
   const routes = await request.get("/api/routes").then((r) => r.json());
@@ -144,6 +148,7 @@ test("un réglage de vitesse personnalisé survit à la sauvegarde et au recharg
   expect(created.no_speed_limit).toBe(false);
 
   await page.reload();
+  await openTab(page, "saved");
   await page
     .locator("#saved-routes-list li", { hasText: name })
     .locator("button", { hasText: "✎" })
