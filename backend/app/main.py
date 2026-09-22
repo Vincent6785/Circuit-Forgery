@@ -13,6 +13,7 @@ from app.db.session import init_db
 from app.routers import client_config, geocode, gpx, health, poi, routes
 from app.services.geocoding_client import geocoding_client
 from app.services.graphhopper_client import graphhopper_client
+from app.services.irve_client import irve_client
 
 # Sans configuration, les journaux de l'application (erreurs amont de
 # GraphHopper ou Nominatim, notamment) n'étaient écrits nulle part. Sans
@@ -28,9 +29,11 @@ _MULTIPART_OVERHEAD_BYTES = 64_000
 async def lifespan(app: FastAPI):
     init_db()
     yield
-    # Ferme les pools de connexions HTTP partagés (GraphHopper, Nominatim).
+    # Ferme les pools de connexions HTTP partagés (GraphHopper, Nominatim,
+    # data.gouv pour les bornes de recharge).
     await graphhopper_client.aclose()
     await geocoding_client.aclose()
+    await irve_client.aclose()
 
 
 app = FastAPI(title="Circuit Forgery", lifespan=lifespan)

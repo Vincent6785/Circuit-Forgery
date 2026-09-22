@@ -5,10 +5,13 @@ const PROFILE_DEFAULT_KMH = 80;
 /** Résumé d'une ligne des options actives, affiché sur le panneau replié
  * "Options du trajet" pour qu'une contrainte en cours reste visible sans
  * avoir à le déplier. */
-export function routeOptionsSummary({ speedLimitKmh, noSpeedLimit, avoidZones }) {
+export function routeOptionsSummary({ speedLimitKmh, noSpeedLimit, avoidZones, evEnabled, evSettings }) {
   const parts = [noSpeedLimit ? "Sans limite" : `≤ ${speedLimitKmh ?? PROFILE_DEFAULT_KMH} km/h`];
   const zoneCount = avoidZones?.length ?? 0;
   if (zoneCount > 0) parts.push(`${zoneCount} zone${zoneCount > 1 ? "s" : ""} à éviter`);
+  // Le mode électrique change la durée et le tracé du trajet : il doit rester
+  // visible sans déplier les options, au même titre qu'une zone à éviter.
+  if (evEnabled) parts.push(`⚡ tous les ${evSettings?.rechargeIntervalKm ?? "?"} km`);
   return parts.join(" · ");
 }
 
@@ -18,6 +21,6 @@ export function initRouteOptionsSummary(store) {
     const text = routeOptionsSummary(state);
     if (el.textContent !== text) el.textContent = text;
   }
-  store.subscribe(render, { keys: ["speedLimitKmh", "noSpeedLimit", "avoidZones"] });
+  store.subscribe(render, { keys: ["speedLimitKmh", "noSpeedLimit", "avoidZones", "evEnabled", "evSettings"] });
   render(store.getState());
 }

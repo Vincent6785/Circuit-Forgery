@@ -9,6 +9,16 @@ publie les images Docker correspondantes.
 
 ### Ajouté
 
+- Mode **véhicule électrique** : autonomie, distance entre deux recharges
+  (20 km par défaut) et vitesse de recharge (1 min 30 pour 1 % par défaut).
+  Le trajet est recalculé pour passer par des bornes réelles de la Base
+  nationale des IRVE (data.gouv.fr, Licence Ouverte), affichées sur la carte
+  et listées avec leur puissance et leur durée de recharge. Vaut pour un
+  itinéraire A → B comme pour un circuit en boucle généré, et le réglage est
+  enregistré avec le trajet. Nouveau champ `ev` sur `POST /api/routes/compute`
+  et sur les trajets sauvegardés ; bornes mises en cache en base, avec repli
+  propre (trajet sans arrêt, message explicite) si data.gouv est indisponible.
+
 - Circuit en boucle : plusieurs points de passage imposés au lieu d'un seul.
   Le mode de pose reste actif d'un clic à l'autre, les points sont listés dans
   la sidebar (numérotés dans l'ordre de traversée) et retirables un par un ou

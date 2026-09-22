@@ -16,6 +16,24 @@ import { apiFetch } from "./http.js";
  * @property {number[]} [cumulative_distance_m]
  * @property {WaypointInput[]} [waypoints]
  * @property {boolean} [simplified]
+ * @property {ChargingStop[]} [charging_stops]
+ * @property {number} [charging_duration_s]
+ * @property {number} [charging_unplaced]
+ * @property {number | null} [charging_max_gap_m]
+ * @property {boolean} [charging_unavailable]
+ *
+ * @typedef {object} ChargingStop
+ * @property {number} lat
+ * @property {number} lon
+ * @property {string} name
+ * @property {string | null} [address]
+ * @property {number | null} [power_kw]
+ * @property {number} [point_count]
+ * @property {boolean} [two_wheeler]
+ * @property {number} detour_m
+ * @property {number} route_distance_m
+ * @property {number} charge_percent
+ * @property {number} charge_duration_s
  */
 
 /**
@@ -52,10 +70,17 @@ export function fromApiAvoidZones(zones) {
  * @param {AvoidZone[]} [avoidZones]
  * @param {number | null} [speedLimitKmh]
  * @param {boolean} [noSpeedLimit]
- * @param {{ signal?: AbortSignal }} [options]
+ * @param {{ signal?: AbortSignal, ev?: object | null }} [options] `ev` non nul
+ *   demande au backend d'insérer les arrêts recharge (bornes IRVE).
  * @returns {Promise<ComputeRouteResponse>}
  */
-export function computeRoute(waypoints, avoidZones = [], speedLimitKmh = null, noSpeedLimit = false, { signal } = {}) {
+export function computeRoute(
+  waypoints,
+  avoidZones = [],
+  speedLimitKmh = null,
+  noSpeedLimit = false,
+  { signal, ev = null } = {}
+) {
   return _postJson(
     "/api/routes/compute",
     {
@@ -63,6 +88,7 @@ export function computeRoute(waypoints, avoidZones = [], speedLimitKmh = null, n
       avoid_zones: toApiAvoidZones(avoidZones),
       speed_limit_kmh: speedLimitKmh,
       no_speed_limit: noSpeedLimit,
+      ev,
     },
     "Erreur de calcul d'itinéraire",
     signal

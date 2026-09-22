@@ -20,6 +20,8 @@ export function serializeDraft(state) {
     speedLimitKmh: state.speedLimitKmh,
     noSpeedLimit: state.noSpeedLimit,
     pendingForcedPoints: state.pendingForcedPoints,
+    evEnabled: state.evEnabled,
+    evSettings: state.evSettings,
     roundTripVariant: state.roundTripVariant,
     // Sans ça, recharger la page pendant la modification d'un trajet
     // sauvegardé le restaurait comme un nouveau trajet : "Sauvegarder" créait

@@ -24,4 +24,24 @@ describe("routeOptionsSummary", () => {
   it("tolère des zones absentes", () => {
     expect(routeOptionsSummary({ speedLimitKmh: null, noSpeedLimit: false })).toBe("≤ 80 km/h");
   });
+
+  it("signale le mode électrique et son intervalle de recharge", () => {
+    // Le mode électrique change le tracé et la durée : il doit rester visible
+    // sans déplier le panneau d'options.
+    expect(
+      routeOptionsSummary({
+        speedLimitKmh: null,
+        noSpeedLimit: false,
+        avoidZones: [],
+        evEnabled: true,
+        evSettings: { autonomyKm: 100, rechargeIntervalKm: 20, secondsPerPercent: 90 },
+      })
+    ).toBe("≤ 80 km/h · ⚡ tous les 20 km");
+  });
+
+  it("ne dit rien du mode électrique quand il est décoché", () => {
+    expect(
+      routeOptionsSummary({ speedLimitKmh: null, noSpeedLimit: false, avoidZones: [], evEnabled: false })
+    ).toBe("≤ 80 km/h");
+  });
 });

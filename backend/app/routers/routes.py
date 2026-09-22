@@ -16,6 +16,7 @@ from app.schemas.route import (
     AvoidZone,
     ComputeRouteRequest,
     ComputeRouteResponse,
+    EvSettings,
     RouteCreate,
     RouteOut,
     RouteSummaryOut,
@@ -23,6 +24,7 @@ from app.schemas.route import (
     RouteUpdate,
     WaypointOut,
 )
+from app.services.charging_route import route_with_charging
 from app.services.geo_sampling import subsample_indices
 from app.services.graphhopper_client import graphhopper_client
 from app.services.route_enrichment import path_to_response
@@ -41,6 +43,21 @@ def _profile_for(no_speed_limit: bool) -> str:
     return settings.graphhopper_no_limit_profile if no_speed_limit else settings.graphhopper_profile
 
 
+def _ev_to_json(ev: EvSettings | None) -> str | None:
+    return json.dumps(ev.model_dump()) if ev else None
+
+
+def _ev_from_json(raw: str | None) -> EvSettings | None:
+    if not raw:
+        return None
+    try:
+        return EvSettings(**json.loads(raw))
+    except (ValueError, TypeError):
+        # Réglage écrit par une version dont le schéma différait : le trajet
+        # reste lisible, simplement sans son mode électrique.
+        return None
+
+
 def _route_to_out(route: Route) -> RouteOut:
     return RouteOut(
         id=route.id,
@@ -57,6 +74,7 @@ def _route_to_out(route: Route) -> RouteOut:
         avoid_zones=[AvoidZone(**z) for z in json.loads(route.avoid_zones_json)] if route.avoid_zones_json else [],
         speed_limit_kmh=route.speed_limit_kmh,
         no_speed_limit=route.no_speed_limit,
+        ev=_ev_from_json(route.ev_json),
     )
 
 
@@ -68,16 +86,26 @@ def _get_route_or_404(db: Session, route_id: int) -> Route:
 
 
 @router.post("/compute", response_model=ComputeRouteResponse)
-async def compute_route(body: ComputeRouteRequest):
+async def compute_route(body: ComputeRouteRequest, db: Session = Depends(get_db)):
     validate_waypoints(body.waypoints)
     validate_avoid_zones(body.avoid_zones)
+    routing_options = {
+        "avoid_zones": body.avoid_zones or None,
+        "speed_limit_kmh": body.speed_limit_kmh,
+        "no_speed_limit": body.no_speed_limit,
+    }
     path = await graphhopper_client.route(
-        [(wp.lat, wp.lon) for wp in body.waypoints],
-        avoid_zones=body.avoid_zones or None,
-        speed_limit_kmh=body.speed_limit_kmh,
-        no_speed_limit=body.no_speed_limit,
+        [(wp.lat, wp.lon) for wp in body.waypoints], **routing_options
     )
-    return path_to_response(path)
+    response = path_to_response(path)
+    if body.ev is None:
+        return response
+    # Mode électrique : ce premier tracé sert à savoir où les recharges sont
+    # dues ; route_with_charging en recalcule un second qui passe par les
+    # bornes retenues. La base sert de cache aux données IRVE de data.gouv.
+    return await route_with_charging(
+        db, body.waypoints, response, body.ev, **routing_options
+    )
 
 
 @router.post("/round-trip", response_model=ComputeRouteResponse)
@@ -177,6 +205,7 @@ def create_route(body: RouteCreate, db: Session = Depends(get_db)):
         avoid_zones_json=json.dumps([z.model_dump() for z in body.avoid_zones]) if body.avoid_zones else None,
         speed_limit_kmh=body.speed_limit_kmh,
         no_speed_limit=body.no_speed_limit,
+        ev_json=_ev_to_json(body.ev),
     )
     db.add(route)
     db.commit()
@@ -219,6 +248,8 @@ def update_route(route_id: int, body: RouteUpdate, db: Session = Depends(get_db)
     if "no_speed_limit" in provided:
         route.no_speed_limit = body.no_speed_limit
         route.profile = _profile_for(body.no_speed_limit)
+    if "ev" in provided:
+        route.ev_json = _ev_to_json(body.ev)
 
     # Basculer un favori ne modifie pas le trajet lui-même.
     if provided - {"is_favorite"}:

@@ -1,8 +1,17 @@
 import { createRoute, getRoute, updateRoute } from "../api/saved-routes.js";
 import { computeRoute, toApiAvoidZones, fromApiAvoidZones } from "../api/routing.js";
-import { showRouteInfo, hideRouteInfo, showRouteError, hideRouteError, showBanner } from "../ui/sidebar.js";
+import {
+  showRouteInfo,
+  hideRouteInfo,
+  showRouteError,
+  hideRouteError,
+  showBanner,
+  formatDuration,
+} from "../ui/sidebar.js";
 import { refreshSavedRoutesList } from "../ui/saved-routes-list.js";
 import { renderWaypointList } from "../ui/waypoint-list.js";
+import { renderChargingStopList } from "../ui/charging-stop-list.js";
+import { DEFAULT_EV_SETTINGS, toApiEv, fromApiEv } from "../utils/ev.js";
 import { clearDraft } from "../state/draft-storage.js";
 import { switchTab } from "../ui/tabs.js";
 import { createLatestRequest } from "../api/latest-request.js";
@@ -18,7 +27,14 @@ const ROUTE_ACTION_BUTTON_IDS = ["save-route-btn", "update-route-btn", "export-g
  * édition d'un trajet existant, effacement. Reçoit le store et les objets
  * carte déjà construits par main.js au lieu de les recréer ici.
  */
-export function initRouteController({ store, waypointManager, routeLayer, draftAutosave, trackBusy = (promise) => promise }) {
+export function initRouteController({
+  store,
+  waypointManager,
+  routeLayer,
+  chargingStopLayer,
+  draftAutosave,
+  trackBusy = (promise) => promise,
+}) {
   // "Dernier appel gagne" : une mutation qui arrive pendant un calcul annule
   // la requête précédente, dont le résultat ne peut plus mettre à jour le DOM.
   const routeRequest = createLatestRequest();
@@ -33,6 +49,11 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     return currentComputation;
   }
 
+  /** Réglages électriques à envoyer au calcul, ou null en thermique. */
+  function apiEv(state = store.getState()) {
+    return toApiEv(state.evEnabled, state.evSettings ?? DEFAULT_EV_SETTINGS);
+  }
+
   async function computeAndRender(waypoints) {
     if (waypoints.length < 2) {
       routeRequest.cancel();
@@ -43,10 +64,13 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
       return;
     }
     const { avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
+    const ev = apiEv();
     let outcome;
     try {
       outcome = await trackBusy(
-        routeRequest.run((signal) => computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit, { signal }))
+        routeRequest.run((signal) =>
+          computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit, { signal, ev })
+        )
       );
     } catch (err) {
       // Le tracé affiché décrivait les points précédents : le garder laissait
@@ -103,6 +127,50 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     document.getElementById("close-loop-btn").disabled = wp.length < 2 || alreadyClosed;
     document.getElementById("reverse-route-btn").disabled = wp.length < 2;
   }, { keys: ["waypoints", "computedRoute"] });
+
+  // Arrêts recharge : calque sur la carte et panneau de la sidebar. Ils ne
+  // dépendent que du tracé calculé — le backend les y place, ils ne font
+  // jamais partie des points de l'utilisateur.
+  store.subscribe(
+    (state) => {
+      const route = state.computedRoute;
+      const stops = route?.charging_stops ?? [];
+      const unavailable = route?.charging_unavailable === true;
+      chargingStopLayer.render(stops);
+      // Panneau masqué hors mode électrique : un trajet thermique n'a rien à
+      // y dire, pas même "aucun arrêt nécessaire".
+      const visible = state.evEnabled && route != null;
+      document.getElementById("charging-panel").classList.toggle("hidden", !visible);
+      if (!visible) return;
+      renderChargingStopList(
+        stops,
+        {
+          chargingDurationS: route.charging_duration_s ?? 0,
+          unplaced: route.charging_unplaced ?? 0,
+          unavailable,
+          maxGapM: route.charging_max_gap_m ?? null,
+          intervalKm: (state.evSettings ?? DEFAULT_EV_SETTINGS).rechargeIntervalKm,
+        },
+        (index) => chargingStopLayer.panTo(index)
+      );
+    },
+    { keys: ["computedRoute", "evEnabled", "evSettings"] }
+  );
+
+  // Durée totale porte à porte : conduite + recharges. Affichée séparément
+  // pour que la durée de conduite reste comparable à celle d'un trajet
+  // thermique.
+  store.subscribe(
+    (state) => {
+      const route = state.computedRoute;
+      const charging = route?.charging_duration_s ?? 0;
+      const el = document.getElementById("route-total-with-charging");
+      const visible = state.evEnabled && route != null && charging > 0;
+      el.classList.toggle("hidden", !visible);
+      if (visible) el.textContent = `Avec les recharges : ${formatDuration(route.duration_s + charging)}`;
+    },
+    { keys: ["computedRoute", "evEnabled"] }
+  );
 
   // Sans tracé calculé (calcul en échec), rien à sauvegarder ni à exporter :
   // la distance affichée ne correspondrait plus aux points.
@@ -164,6 +232,10 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         roundTripVariant: null,
       }
     );
+    // evEnabled/evSettings survivent volontairement : ils décrivent la
+    // machine, pas le trajet effacé, et restent visibles dans les options
+    // (contrairement aux points de passage en attente, invisibles une fois
+    // les points effacés, qui eux devaient être remis à zéro).
     document.getElementById("route-description-input").value = "";
     discardDraft();
   }
@@ -193,6 +265,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         avoid_zones: toApiAvoidZones(avoidZones),
         speed_limit_kmh: speedLimitKmh,
         no_speed_limit: noSpeedLimit,
+        ev: apiEv(),
       });
       hideRouteError();
       nameInput.value = "";
@@ -256,6 +329,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         avoid_zones: toApiAvoidZones(avoidZones),
         speed_limit_kmh: speedLimitKmh,
         no_speed_limit: noSpeedLimit,
+        ev: apiEv(),
       });
       hideRouteError();
       nameInput.value = "";
@@ -300,6 +374,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
     // annulation, son résultat arrivait après et devenait le tracé courant du
     // trajet ouvert — sauvegardé avec lui par "Enregistrer les modifications".
     routeRequest.cancel();
+    const loadedEv = fromApiEv(route.ev);
     // Ouvert depuis "Mes trajets" : on bascule là où ses points s'éditent.
     switchTab("route");
     // Le brouillon en cours est remplacé par ce trajet : sans ça, un
@@ -329,6 +404,11 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         noSpeedLimit: route.no_speed_limit || false,
         pendingForcedPoints: [],
         roundTripVariant: null,
+        // Un trajet enregistré porte le véhicule avec lequel il a été
+        // préparé : l'ouvrir rétablit son mode électrique et ses réglages,
+        // ou repasse en thermique s'il n'en a pas.
+        evEnabled: loadedEv !== null,
+        evSettings: loadedEv ?? store.getState().evSettings ?? DEFAULT_EV_SETTINGS,
       }
     );
   }
@@ -356,11 +436,12 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
    * s'il décrit bien le même trajet, et son échec (moteur indisponible)
    * passe inaperçu. */
   async function enrichLoadedRoute(route, seq) {
-    const { waypoints, avoidZones, speedLimitKmh, noSpeedLimit } = store.getState();
+    const state = store.getState();
+    const { waypoints, avoidZones, speedLimitKmh, noSpeedLimit } = state;
     if (waypoints.length < 2) return;
     let result;
     try {
-      result = await computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit);
+      result = await computeRoute(waypoints, avoidZones, speedLimitKmh, noSpeedLimit, { ev: apiEv(state) });
     } catch {
       return;
     }
