@@ -53,7 +53,7 @@ const store = createStore({
   avoidZones: [], // liste de {lat, lon, radiusM}
   speedLimitKmh: null, // seuil personnalisé (20-80), ou null = défaut du profil (80)
   noSpeedLimit: false, // true = profil sans exclusion de vitesse
-  pendingForcedPoint: null, // {lat, lon} | null — point de passage pour la prochaine génération de circuit en boucle
+  pendingForcedPoints: [], // liste de {lat, lon} — points de passage imposés à la prochaine génération de circuit en boucle
   roundTripVariant: null, // {start: {lat, lon}, distanceM} | null — dernier circuit en boucle généré avec succès, pour "Nouvelle variante"
 });
 
@@ -117,6 +117,16 @@ map.on("contextmenu", (e) => {
 
 refreshPoi();
 
+/** Points de passage d'un brouillon. Un brouillon écrit avant le passage au
+ * multi-points n'en contient qu'un seul, sous `pendingForcedPoint` : le
+ * reprendre évite de le perdre silencieusement à la première ouverture après
+ * mise à jour.
+ * @param {Record<string, any>} draft */
+function restoredForcedPoints(draft) {
+  if (Array.isArray(draft.pendingForcedPoints)) return draft.pendingForcedPoints;
+  return draft.pendingForcedPoint ? [draft.pendingForcedPoint] : [];
+}
+
 // Restaure le brouillon local : sans ça, un trajet non sauvegardé serait perdu au rechargement.
 const draft = loadDraft();
 if (draft && draft.waypoints?.length > 0) {
@@ -126,7 +136,7 @@ if (draft && draft.waypoints?.length > 0) {
       avoidZones: draft.avoidZones || [],
       speedLimitKmh: draft.speedLimitKmh ?? null,
       noSpeedLimit: draft.noSpeedLimit || false,
-      pendingForcedPoint: draft.pendingForcedPoint ?? null,
+      pendingForcedPoints: restoredForcedPoints(draft),
       roundTripVariant: draft.roundTripVariant ?? null,
       editingRouteId: draft.editingRouteId ?? null,
     }

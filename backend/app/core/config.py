@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # limite ni côté client ni côté serveur.
     max_avoid_zones: int = Field(default=20, ge=1)
     max_round_trip_distance_m: float = Field(default=500_000, gt=0)
+    # Points de passage imposés à un circuit en boucle : chacun consomme un
+    # emplacement sous max_waypoints (routers/routes.py::compute_round_trip
+    # réduit d'autant l'échantillonnage du circuit généré), et un circuit qui
+    # en compterait des dizaines ne serait plus un circuit mais un itinéraire
+    # — l'onglet Itinéraire est fait pour ça.
+    max_round_trip_via_points: int = Field(default=20, ge=0)
     # Taille maximale d'un corps de requête, vérifiée avant sa lecture
     # complète (app/core/body_limit.py). 10 Mo couvrent largement la
     # géométrie d'un long trajet sauvegardé ; l'import GPX a sa propre borne,

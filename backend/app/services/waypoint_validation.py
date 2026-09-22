@@ -19,6 +19,19 @@ def validate_waypoints(waypoints: Sequence[Waypoint]) -> None:
         _check_within_france(wp.lat, wp.lon)
 
 
+def validate_via_points(via_points: Sequence[Waypoint]) -> None:
+    """Points de passage imposés à un circuit en boucle. Plafond distinct de
+    max_waypoints : chacun consomme un emplacement sous celui-ci (le circuit
+    généré est échantillonné d'autant moins finement), et un circuit qui en
+    compterait des dizaines relèverait de l'onglet Itinéraire."""
+    if len(via_points) > settings.max_round_trip_via_points:
+        raise InvalidInputError(
+            f"Trop de points de passage (max {settings.max_round_trip_via_points})"
+        )
+    for wp in via_points:
+        _check_within_france(wp.lat, wp.lon)
+
+
 def validate_avoid_zones(avoid_zones: Sequence[AvoidZone]) -> None:
     if len(avoid_zones) > settings.max_avoid_zones:
         raise InvalidInputError(f"Trop de zones à éviter (max {settings.max_avoid_zones})")

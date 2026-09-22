@@ -116,6 +116,11 @@ class RoundTripRequest(RequestModel):
     start: Waypoint
     distance_m: float = Field(gt=0)
     seed: Optional[int] = None
+    # Points que le circuit généré doit traverser, dans l'ordre où ils ont été
+    # posés. GraphHopper ne sait pas les imposer à round_trip (un seul point
+    # accepté) : ils sont insérés dans le circuit obtenu, cf.
+    # services/via_points.py.
+    via_points: list[Waypoint] = []
     avoid_zones: list[AvoidZone] = []
     speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: bool = False

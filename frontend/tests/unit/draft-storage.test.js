@@ -19,7 +19,7 @@ const STATE = {
   avoidZones: [],
   speedLimitKmh: 60,
   noSpeedLimit: false,
-  pendingForcedPoint: null,
+  pendingForcedPoints: [{ lat: 48.87, lon: 2.34 }],
   roundTripVariant: null,
   editingRouteId: 12,
 };
@@ -35,6 +35,12 @@ describe("serializeDraft", () => {
     expect(draft.editingRouteId).toBe(12);
     expect(draft.speedLimitKmh).toBe(60);
     expect(typeof draft.savedAt).toBe("string");
+  });
+
+  it("inclut les points de passage en attente", () => {
+    // Sans eux, recharger la page entre la pose des points de passage et la
+    // génération du circuit les perdait silencieusement.
+    expect(serializeDraft(STATE).pendingForcedPoints).toEqual([{ lat: 48.87, lon: 2.34 }]);
   });
 });
 

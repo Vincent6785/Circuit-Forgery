@@ -138,14 +138,31 @@ test("fermer la boucle ajoute le point de départ en fin de trajet", async ({ pa
   await expect(page.locator("#close-loop-btn")).toBeDisabled();
 });
 
+/** Pose des points de passage imposés puis sort du mode de pose. */
+async function addForcedPoints(page, points) {
+  await page.locator("#round-trip-forced-point-btn").click();
+  for (const [lat, lon] of points) await clickMapAt(page, lat, lon);
+  await expect(page.locator("#round-trip-forced-point-list li")).toHaveCount(points.length);
+  await page.keyboard.press("Escape");
+}
+
+/** Le circuit passe-t-il par ce point ? Les points de passage sont insérés
+ * tels quels dans les waypoints, sans accrochage au réseau routier. */
+function includesPoint(waypoints, lat, lon) {
+  return waypoints.some((w) => Math.abs(w.lat - lat) < 1e-4 && Math.abs(w.lon - lon) < 1e-4);
+}
+
 test("un point de passage défini est bien inséré dans le circuit généré", async ({ page }) => {
   await setupView(page);
 
   await page.locator("#round-trip-forced-point-btn").click();
   await expect(page.locator("#round-trip-hint-text")).toContainText("devra traverser");
   await clickMapAt(page, 48.87, 2.34);
-  await expect(page.locator("#round-trip-hint")).toHaveClass(/hidden/);
-  await expect(page.locator("#round-trip-forced-point-status")).not.toHaveClass(/hidden/);
+  // Le mode de pose reste actif pour en enchaîner d'autres : seul Échap,
+  // "Terminer" ou le bouton lui-même en sortent.
+  await expect(page.locator("#round-trip-hint")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#round-trip-forced-point-panel")).not.toHaveClass(/hidden/);
+  await page.keyboard.press("Escape");
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
@@ -153,10 +170,52 @@ test("un point de passage défini est bien inséré dans le circuit généré", 
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
 
   const waypoints = await page.evaluate(() => window.__getWaypoints());
-  const hasForcedPoint = waypoints.some(
-    (w) => Math.abs(w.lat - 48.87) < 1e-4 && Math.abs(w.lon - 2.34) < 1e-4
-  );
-  expect(hasForcedPoint).toBe(true);
+  expect(includesPoint(waypoints, 48.87, 2.34)).toBe(true);
+});
+
+test("plusieurs points de passage sont tous traversés par le circuit généré", async ({ page }) => {
+  await setupView(page);
+
+  const forced = [
+    [48.875, 2.34],
+    [48.855, 2.30],
+    [48.85, 2.355],
+  ];
+  await addForcedPoints(page, forced);
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
+
+  const waypoints = await page.evaluate(() => window.__getWaypoints());
+  for (const [lat, lon] of forced) expect(includesPoint(waypoints, lat, lon)).toBe(true);
+  // Le circuit reste sous le plafond de waypoints malgré les points ajoutés :
+  // le backend réserve leurs emplacements en échantillonnant d'autant moins
+  // finement, sinon le recalcul déclenché juste après échouerait.
+  expect(waypoints.length).toBeLessThan(100);
+  await expect(page.locator("#route-error")).not.toHaveClass(/error/);
+});
+
+test("retirer un seul point de passage laisse les autres en place", async ({ page }) => {
+  await setupView(page);
+
+  await addForcedPoints(page, [
+    [48.875, 2.34],
+    [48.855, 2.30],
+  ]);
+
+  await page.locator("#round-trip-forced-point-list li").first().locator("button").click();
+  await expect(page.locator("#round-trip-forced-point-list li")).toHaveCount(1);
+
+  await page.fill("#round-trip-distance-input", "15");
+  await page.locator("#round-trip-generate-btn").click();
+  await clickMapAt(page, 48.8566, 2.3522);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
+
+  const waypoints = await page.evaluate(() => window.__getWaypoints());
+  expect(includesPoint(waypoints, 48.875, 2.34)).toBe(false);
+  expect(includesPoint(waypoints, 48.855, 2.30)).toBe(true);
 });
 
 test("Échap pendant le mode point de passage n'en définit aucun", async ({ page }) => {
@@ -166,22 +225,23 @@ test("Échap pendant le mode point de passage n'en définit aucun", async ({ pag
   await expect(page.locator("#round-trip-hint")).not.toHaveClass(/hidden/);
   await page.keyboard.press("Escape");
   await expect(page.locator("#round-trip-hint")).toHaveClass(/hidden/);
-  await expect(page.locator("#round-trip-forced-point-status")).toHaveClass(/hidden/);
+  await expect(page.locator("#round-trip-forced-point-panel")).toHaveClass(/hidden/);
 
   // Le clic suivant doit redevenir un ajout de point ordinaire.
   await clickMapAt(page, 48.8566, 2.3522);
   await expect(page.locator("#waypoint-list li")).toHaveCount(1);
 });
 
-test("retirer le point de passage avant génération l'exclut du circuit", async ({ page }) => {
+test("retirer les points de passage avant génération les exclut du circuit", async ({ page }) => {
   await setupView(page);
 
-  await page.locator("#round-trip-forced-point-btn").click();
-  await clickMapAt(page, 48.87, 2.34);
-  await expect(page.locator("#round-trip-forced-point-status")).not.toHaveClass(/hidden/);
+  await addForcedPoints(page, [
+    [48.87, 2.34],
+    [48.855, 2.30],
+  ]);
 
   await page.locator("#round-trip-forced-point-clear-btn").click();
-  await expect(page.locator("#round-trip-forced-point-status")).toHaveClass(/hidden/);
+  await expect(page.locator("#round-trip-forced-point-panel")).toHaveClass(/hidden/);
 
   await page.fill("#round-trip-distance-input", "15");
   await page.locator("#round-trip-generate-btn").click();
@@ -189,13 +249,11 @@ test("retirer le point de passage avant génération l'exclut du circuit", async
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
 
   const waypoints = await page.evaluate(() => window.__getWaypoints());
-  const hasForcedPoint = waypoints.some(
-    (w) => Math.abs(w.lat - 48.87) < 1e-4 && Math.abs(w.lon - 2.34) < 1e-4
-  );
-  expect(hasForcedPoint).toBe(false);
+  expect(includesPoint(waypoints, 48.87, 2.34)).toBe(false);
+  expect(includesPoint(waypoints, 48.855, 2.30)).toBe(false);
 });
 
-test("Effacer les points retire aussi un point de passage en attente", async ({ page }) => {
+test("Effacer les points retire aussi les points de passage en attente", async ({ page }) => {
   // Régression : forcedPoint vivait en variable locale au contrôleur
   // round-trip, invisible du reset fait par "Effacer les points" (qui ne
   // connaît que le store) — le marqueur restait affiché et le point était
@@ -204,12 +262,13 @@ test("Effacer les points retire aussi un point de passage en attente", async ({ 
   await clickMapAt(page, 48.8566, 2.3522);
   await expect(page.locator("#waypoint-list li")).toHaveCount(1);
 
-  await page.locator("#round-trip-forced-point-btn").click();
-  await clickMapAt(page, 48.87, 2.34);
-  await expect(page.locator("#round-trip-forced-point-status")).not.toHaveClass(/hidden/);
+  await addForcedPoints(page, [
+    [48.87, 2.34],
+    [48.855, 2.30],
+  ]);
 
   await page.locator("#clear-route-btn").click();
-  await expect(page.locator("#round-trip-forced-point-status")).toHaveClass(/hidden/);
+  await expect(page.locator("#round-trip-forced-point-panel")).toHaveClass(/hidden/);
   await expect(page.locator("#waypoint-list li")).toHaveCount(0);
 
   await page.fill("#round-trip-distance-input", "15");
@@ -218,10 +277,8 @@ test("Effacer les points retire aussi un point de passage en attente", async ({ 
   await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: 10000 });
 
   const waypoints = await page.evaluate(() => window.__getWaypoints());
-  const hasForcedPoint = waypoints.some(
-    (w) => Math.abs(w.lat - 48.87) < 1e-4 && Math.abs(w.lon - 2.34) < 1e-4
-  );
-  expect(hasForcedPoint).toBe(false);
+  expect(includesPoint(waypoints, 48.87, 2.34)).toBe(false);
+  expect(includesPoint(waypoints, 48.855, 2.30)).toBe(false);
 });
 
 test("Effacer les points désactive Nouvelle variante et régénère avec le bon point de départ après", async ({
