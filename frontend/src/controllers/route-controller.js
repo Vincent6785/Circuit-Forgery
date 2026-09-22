@@ -266,6 +266,7 @@ export function initRouteController({
         speed_limit_kmh: speedLimitKmh,
         no_speed_limit: noSpeedLimit,
         ev: apiEv(),
+        charging_stops: computedRoute.charging_stops ?? [],
       });
       hideRouteError();
       nameInput.value = "";
@@ -296,6 +297,9 @@ export function initRouteController({
           name,
           waypoints: waypoints.map((p) => ({ lat: p.lat, lon: p.lon, label: p.label || null })),
           geometry_geojson: computedRoute.geometry_geojson,
+          // Le tracé exporté passe déjà par les bornes ; les y ajouter comme
+          // repères permet de les retrouver sur le GPS.
+          charging_stops: computedRoute.charging_stops ?? [],
         })
       );
       downloadBlob(blob, gpxFileName(name));
@@ -330,6 +334,7 @@ export function initRouteController({
         speed_limit_kmh: speedLimitKmh,
         no_speed_limit: noSpeedLimit,
         ev: apiEv(),
+        charging_stops: computedRoute.charging_stops ?? [],
       });
       hideRouteError();
       nameInput.value = "";
@@ -397,6 +402,14 @@ export function initRouteController({
           distance_m: route.distance_m,
           duration_s: route.duration_s,
           geometry_geojson: route.geometry_geojson,
+          // Arrêts enregistrés avec le trajet : affichés tout de suite, sans
+          // attendre le recalcul d'enrichissement — et ce sont bien ceux par
+          // lesquels passe la géométrie enregistrée.
+          charging_stops: route.charging_stops ?? [],
+          charging_duration_s: (route.charging_stops ?? []).reduce(
+            (total, stop) => total + (stop.charge_duration_s ?? 0),
+            0
+          ),
         },
         editingRouteId,
         avoidZones: fromApiAvoidZones(route.avoid_zones),

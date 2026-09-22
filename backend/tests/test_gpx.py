@@ -1,7 +1,9 @@
+import xml.etree.ElementTree as ET
+
 import pytest
 
-from app.schemas.route import Waypoint
-from app.services.gpx import build_gpx, parse_gpx
+from app.schemas.route import ChargingStopOut, Waypoint, WaypointOut
+from app.services.gpx import GPX_NS, build_gpx, parse_gpx
 
 SAMPLE_RTE_GPX = b"""<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
@@ -197,3 +199,106 @@ def test_build_gpx_ignores_elevation_in_track():
     geometry = {"type": "LineString", "coordinates": [[2.35, 48.85, 35.0], [2.36, 48.86, 40.0]]}
     xml = build_gpx("Avec altitude", waypoints, geometry)
     assert '<trkpt lat="48.860000" lon="2.360000" />' in xml
+
+
+# --- Arrêts recharge dans l'export -----------------------------------------
+
+
+def _stop(name="Borne du col", lat=45.5, lon=4.5, **overrides):
+    values = {
+        "lat": lat,
+        "lon": lon,
+        "name": name,
+        "address": "1 route du Col",
+        "power_kw": 50.0,
+        "point_count": 4,
+        "two_wheeler": False,
+        "detour_m": 320.0,
+        "route_distance_m": 20500.0,
+        "charge_percent": 20.0,
+        "charge_duration_s": 1800.0,
+    }
+    values.update(overrides)
+    return ChargingStopOut(**values)
+
+
+def _export_with_stops(stops):
+    return build_gpx(
+        "trajet",
+        [WaypointOut(lat=48.85, lon=2.35), WaypointOut(lat=45.75, lon=4.85)],
+        {"type": "LineString", "coordinates": [[2.35, 48.85], [4.85, 45.75]]},
+        stops,
+    )
+
+
+def test_charging_stops_are_exported_as_gpx_waypoints():
+    gpx = _export_with_stops([_stop()])
+    root = ET.fromstring(gpx)
+    wpts = root.findall(f"{{{GPX_NS}}}wpt")
+    assert len(wpts) == 1
+    assert wpts[0].get("lat") == "45.500000"
+    assert wpts[0].find(f"{{{GPX_NS}}}name").text == "1. Borne du col"
+    assert wpts[0].find(f"{{{GPX_NS}}}type").text == "charging-station"
+
+
+def test_charging_stop_description_carries_power_and_charge_time():
+    gpx = _export_with_stops([_stop()])
+    desc = ET.fromstring(gpx).find(f"{{{GPX_NS}}}wpt").find(f"{{{GPX_NS}}}desc").text
+    assert "50 kW" in desc
+    assert "4 points de charge" in desc
+    assert "20 %" in desc
+    assert "30 min" in desc
+    assert "20.5 km" in desc
+
+
+def test_charging_stops_come_before_the_route_as_the_gpx_schema_requires():
+    # GPX 1.1 impose l'ordre metadata, wpt*, rte*, trk* : des <wpt> placés
+    # après le <rte> produiraient un fichier que les lecteurs stricts
+    # refusent.
+    gpx = _export_with_stops([_stop(), _stop(name="Seconde borne", lat=46.0)])
+    order = [tag.split("}")[-1] for tag in (child.tag for child in ET.fromstring(gpx))]
+    assert order == ["metadata", "wpt", "wpt", "rte", "trk"]
+
+
+def test_charging_stops_are_not_route_points():
+    # Ce sont des repères, pas des étapes : les écrire en <rtept> les
+    # transformerait en points de l'utilisateur au réimport.
+    gpx = _export_with_stops([_stop()])
+    rtepts = ET.fromstring(gpx).find(f"{{{GPX_NS}}}rte").findall(f"{{{GPX_NS}}}rtept")
+    assert len(rtepts) == 2
+    assert all("Borne" not in (pt.find(f"{{{GPX_NS}}}name").text or "") for pt in rtepts)
+
+
+def test_reimporting_an_export_ignores_the_charging_stops():
+    # parse_gpx lit <rte>/<rtept> en priorité : un aller-retour export/import
+    # rend les deux points du trajet, pas les bornes.
+    gpx = _export_with_stops([_stop()])
+    points, truncated = parse_gpx(gpx.encode(), 100)
+    assert [(round(p.lat, 2), round(p.lon, 2)) for p in points] == [(48.85, 2.35), (45.75, 4.85)]
+    assert truncated is False
+
+
+def test_export_without_charging_stops_is_unchanged():
+    # Un trajet thermique ne doit gagner aucun élément par rapport à avant.
+    assert "<wpt" not in _export_with_stops([])
+    assert "<wpt" not in _export_with_stops(None)
+
+
+def test_charging_stop_name_from_the_open_dataset_is_escaped():
+    # Les noms de stations viennent d'un jeu de données ouvert : un & ou un <
+    # produirait un XML mal formé.
+    gpx = _export_with_stops([_stop(name="Bar & <Resto>")])
+    assert "Bar &amp; &lt;Resto&gt;" in gpx
+    ET.fromstring(gpx)  # doit rester analysable
+
+
+def test_charging_stop_omits_specs_absent_from_the_dataset():
+    desc = (
+        ET.fromstring(_export_with_stops([_stop(power_kw=None, point_count=1, address=None)]))
+        .find(f"{{{GPX_NS}}}wpt")
+        .find(f"{{{GPX_NS}}}desc")
+        .text
+    )
+    assert "kW" not in desc
+    assert "points de charge" not in desc
+    assert "Recharge 20 %" in desc

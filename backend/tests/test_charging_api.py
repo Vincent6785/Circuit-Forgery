@@ -225,3 +225,97 @@ def test_a_route_saved_before_the_ev_mode_has_no_settings(client):
         },
     )
     assert created.json()["ev"] is None
+
+
+# --- Export GPX -------------------------------------------------------------
+
+STOP = {
+    "lat": 48.70,
+    "lon": 2.35,
+    "name": "Borne de test",
+    "address": "1 rue du Test",
+    "power_kw": 50.0,
+    "point_count": 4,
+    "two_wheeler": False,
+    "detour_m": 320.0,
+    "route_distance_m": 20500.0,
+    "charge_percent": 20.0,
+    "charge_duration_s": 1800.0,
+}
+
+
+def _saved_route_payload(name, **extra):
+    payload = {
+        "name": name,
+        "waypoints": [{"lat": 48.85, "lon": 2.35}, {"lat": 48.45, "lon": 2.35}],
+        "distance_m": 44000,
+        "duration_s": 3600,
+        "geometry_geojson": {"type": "LineString", "coordinates": [[2.35, 48.85], [2.35, 48.45]]},
+    }
+    payload.update(extra)
+    return payload
+
+
+def test_current_route_export_includes_the_charging_stops(client):
+    resp = client.post(
+        "/api/gpx/export",
+        json={
+            "name": "trajet électrique",
+            "waypoints": [{"lat": 48.85, "lon": 2.35}, {"lat": 48.45, "lon": 2.35}],
+            "geometry_geojson": {"type": "LineString", "coordinates": [[2.35, 48.85], [2.35, 48.45]]},
+            "charging_stops": [STOP],
+        },
+    )
+    assert resp.status_code == 200
+    assert "<wpt" in resp.text
+    assert "1. Borne de test" in resp.text
+
+
+def test_saved_route_export_includes_its_charging_stops(client):
+    # L'export d'un trajet sauvegardé passe par un autre endpoint que celui du
+    # trajet courant : sans persistance, il perdait les arrêts.
+    created = client.post("/api/routes", json=_saved_route_payload("ev-gpx", ev=EV, charging_stops=[STOP]))
+    assert created.status_code == 201
+    assert len(created.json()["charging_stops"]) == 1
+
+    exported = client.get(f"/api/routes/{created.json()['id']}/export.gpx")
+    assert exported.status_code == 200
+    assert "1. Borne de test" in exported.text
+
+
+def test_saved_thermal_route_export_has_no_charging_waypoint(client):
+    created = client.post("/api/routes", json=_saved_route_payload("thermique-gpx"))
+    exported = client.get(f"/api/routes/{created.json()['id']}/export.gpx")
+    assert "<wpt" not in exported.text
+
+
+def test_updating_the_route_replaces_its_charging_stops(client):
+    # Les arrêts décrivent le tracé : les laisser en place après un nouveau
+    # tracé exportait des bornes sans rapport avec l'itinéraire enregistré.
+    created = client.post("/api/routes", json=_saved_route_payload("ev-maj", ev=EV, charging_stops=[STOP]))
+    route_id = created.json()["id"]
+
+    updated = client.put(
+        f"/api/routes/{route_id}",
+        json={
+            "waypoints": [{"lat": 48.85, "lon": 2.35}, {"lat": 48.80, "lon": 2.35}],
+            "distance_m": 6000,
+            "duration_s": 600,
+            "geometry_geojson": {"type": "LineString", "coordinates": [[2.35, 48.85], [2.35, 48.80]]},
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["charging_stops"] == []
+    assert "<wpt" not in client.get(f"/api/routes/{route_id}/export.gpx").text
+
+
+def test_a_route_saved_before_the_ev_mode_exports_without_charging_stops(client, db_session):
+    # Colonne charging_stops_json à NULL, comme pour un trajet enregistré par
+    # une version antérieure.
+    from app.db.models import Route
+
+    route = db_session.get(
+        Route, client.post("/api/routes", json=_saved_route_payload("ancien")).json()["id"]
+    )
+    assert route.charging_stops_json is None
+    assert client.get(f"/api/routes/{route.id}/export.gpx").status_code == 200
