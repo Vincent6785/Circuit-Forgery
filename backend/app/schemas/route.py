@@ -84,6 +84,47 @@ class LineStringGeometry(RequestModel):
     )
 
 
+class EvSettings(RequestModel):
+    """Véhicule électrique : ce qu'il faut pour placer les arrêts recharge et
+    en chiffrer la durée.
+
+    Le pourcentage rechargé à chaque arrêt n'est pas saisi : il se déduit de
+    l'autonomie et de l'intervalle (parcourir `recharge_interval_km` sur
+    `autonomy_km` d'autonomie consomme exactement cette fraction de batterie),
+    et la durée s'en déduit via `seconds_per_percent`.
+    """
+
+    # Autonomie batterie pleine. Bornée haut pour rester dans le plausible :
+    # au-delà, c'est une faute de frappe (kilomètres saisis en mètres).
+    autonomy_km: float = Field(gt=0, le=2000)
+    recharge_interval_km: float = Field(gt=0, le=2000)
+    # Temps pour regagner 1 % de batterie. 1 min 30 par défaut côté frontend ;
+    # le plafond (1 h) laisse passer une recharge très lente sans accepter une
+    # valeur absurde qui produirait des durées en années.
+    seconds_per_percent: float = Field(gt=0, le=3600)
+
+
+class ChargingStopOut(BaseModel):
+    """Arrêt recharge inséré dans un trajet calculé. Ce n'est pas un waypoint
+    de l'utilisateur : le tracé passe par là, mais la liste des points du
+    trajet n'en est pas modifiée."""
+
+    lat: float
+    lon: float
+    name: str
+    address: Optional[str] = None
+    power_kw: Optional[float] = None
+    point_count: int = 1
+    two_wheeler: bool = False
+    # Écart à vol d'oiseau entre le point du tracé où la recharge était due et
+    # la borne retenue : un grand détour signale une zone mal équipée.
+    detour_m: float
+    # Position de l'arrêt le long du tracé final, en mètres depuis le départ.
+    route_distance_m: float
+    charge_percent: float
+    charge_duration_s: float
+
+
 class ComputeRouteRequest(RequestModel):
     waypoints: list[Waypoint] = Field(min_length=2)
     avoid_zones: list[AvoidZone] = []
@@ -92,6 +133,9 @@ class ComputeRouteRequest(RequestModel):
     # cf. services/avoid_zone.py::build_custom_model pour la raison.
     speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: bool = False
+    # None = véhicule thermique : aucun arrêt recharge n'est cherché, et le
+    # calcul reste celui d'avant (un seul appel à GraphHopper).
+    ev: Optional[EvSettings] = None
 
 
 class ComputeRouteResponse(BaseModel):
@@ -110,6 +154,24 @@ class ComputeRouteResponse(BaseModel):
     # a dû être sous-échantillonné pour respecter max_waypoints — même logique
     # que GpxImportResponse.truncated côté import GPX.
     simplified: bool = False
+    # Arrêts recharge insérés dans le tracé quand `ev` est fourni. Vide sinon.
+    charging_stops: list[ChargingStopOut] = []
+    # Temps de recharge cumulé, à ajouter à duration_s pour obtenir la durée
+    # réelle du trajet.
+    charging_duration_s: float = 0.0
+    # Recharges prévues sans borne trouvée à proximité : le trajet est
+    # affichable, mais l'autonomie n'est pas garantie sur ces tronçons.
+    charging_unplaced: int = 0
+    # Plus grand écart réellement obtenu entre deux recharges (et entre le
+    # départ/l'arrivée et la recharge voisine) sur le tracé final. Les détours
+    # par les bornes rallongent le trajet, donc cet écart dépasse
+    # légèrement l'intervalle demandé ; le renvoyer permet de le dire au lieu
+    # de le masquer. None hors mode électrique.
+    charging_max_gap_m: Optional[float] = None
+    # True quand data.gouv.fr n'a pas pu être interrogé : le trajet est
+    # renvoyé quand même, sans arrêt recharge. Un échec de la base des bornes
+    # ne doit pas priver l'utilisateur de son itinéraire.
+    charging_unavailable: bool = False
 
 
 class RoundTripRequest(RequestModel):
@@ -148,6 +210,7 @@ class RouteCreate(RequestModel):
     avoid_zones: Optional[list[AvoidZone]] = None
     speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: bool = False
+    ev: Optional[EvSettings] = None
 
 
 # Champs décrivant le tracé calculé pour un jeu de waypoints : indissociables.
@@ -174,6 +237,9 @@ class RouteUpdate(RequestModel):
     avoid_zones: Optional[list[AvoidZone]] = None
     speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: Optional[bool] = None
+    # Nullable explicite : repasser un trajet en thermique se fait en envoyant
+    # ev: null, comme pour les zones à éviter.
+    ev: Optional[EvSettings] = None
 
     @model_validator(mode="after")
     def _check_partial_update(self) -> "RouteUpdate":
@@ -210,6 +276,7 @@ class RouteOut(BaseModel):
     avoid_zones: list[AvoidZone] = []
     speed_limit_kmh: Optional[float] = None
     no_speed_limit: bool = False
+    ev: Optional[EvSettings] = None
 
 
 class RouteSummaryOut(BaseModel):

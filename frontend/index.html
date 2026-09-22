@@ -125,6 +125,36 @@
               Aucune limite
             </label>
 
+            <h3 id="ev-heading">Véhicule électrique</h3>
+            <label id="ev-enabled-label">
+              <input type="checkbox" id="ev-enabled-checkbox" />
+              Véhicule électrique
+            </label>
+            <div id="ev-settings" class="subpanel hidden">
+              <p class="hint">
+                Des arrêts recharge sont ajoutés au trajet, aux bornes de la base nationale IRVE (data.gouv.fr).
+              </p>
+              <label class="field-row">
+                <span>Autonomie</span>
+                <input type="number" id="ev-autonomy-input" min="1" max="2000" step="1" value="100" />
+                <span class="field-unit">km</span>
+              </label>
+              <label class="field-row">
+                <span>Recharge tous les</span>
+                <input type="number" id="ev-interval-input" min="1" max="2000" step="1" value="20" />
+                <span class="field-unit">km</span>
+              </label>
+              <p class="hint">Vitesse de recharge : temps pour regagner 1 % de batterie.</p>
+              <div class="field-row">
+                <span>1 %&nbsp;en</span>
+                <input type="number" id="ev-charge-min-input" min="0" max="120" step="1" value="1" aria-label="Minutes pour 1 % de batterie" />
+                <span class="field-unit">min</span>
+                <input type="number" id="ev-charge-sec-input" min="0" max="59" step="1" value="30" aria-label="Secondes pour 1 % de batterie" />
+                <span class="field-unit">s</span>
+              </div>
+              <p id="ev-summary" class="hint" role="status"></p>
+            </div>
+
             <h3>Zones à éviter</h3>
             <p class="hint">Activez le mode puis glissez sur la carte (centre → rayon) pour dessiner une zone à contourner.</p>
             <button id="avoid-zone-toggle-btn" type="button" aria-pressed="false">🚫 Éviter une zone</button>
@@ -183,6 +213,7 @@
         <div id="route-info" class="panel hidden">
           <h2>Trajet</h2>
           <p><strong id="route-distance"></strong> — <span id="route-duration"></span></p>
+          <p id="route-total-with-charging" class="hint hidden"></p>
           <button id="show-alternatives-btn" class="hidden" title="Uniquement pour un trajet à 2 points">
             Voir les itinéraires alternatifs
           </button>
@@ -206,6 +237,12 @@
           <button id="update-route-btn" class="hidden">Enregistrer les modifications</button>
           <button id="cancel-edit-btn" class="hidden">Annuler la modification</button>
           <button id="export-gpx-btn" type="button">⬇ Exporter en GPX</button>
+        </div>
+
+        <div id="charging-panel" class="panel hidden">
+          <h2>Arrêts recharge</h2>
+          <p id="charging-summary" class="hint"></p>
+          <ul id="charging-stop-list"></ul>
         </div>
       </footer>
     </aside>

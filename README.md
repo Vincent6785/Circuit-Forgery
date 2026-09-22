@@ -92,6 +92,34 @@ d'attribution — distincte de la licence du code.
   que de points de passage sous `CF_MAX_WAYPOINTS` en échantillonnant le
   circuit d'autant moins finement, pour que le recalcul qui suit ne bute pas
   sur cette limite.
+- **Véhicule électrique** (options du trajet) : une case bascule le trajet en
+  électrique. Trois réglages — autonomie à batterie pleine, distance entre
+  deux recharges (20 km par défaut) et vitesse de recharge exprimée en temps
+  pour regagner 1 % de batterie (1 min 30 par défaut). Le tracé est alors
+  recalculé pour **passer par des bornes réelles**, issues de la
+  [Base nationale des IRVE](https://www.data.gouv.fr/datasets/base-nationale-des-irve-data-gouv-infrastructures-de-recharge-pour-vehicules-electriques-donnees-statiques/)
+  publiée sur data.gouv.fr sous Licence Ouverte. Les arrêts apparaissent sur
+  la carte (pastilles ⚡ numérotées) et dans un panneau qui donne, pour
+  chacun, la borne retenue, sa puissance et la durée de recharge. Vaut
+  aussi bien pour un itinéraire A → B que pour un circuit en boucle généré.
+  - Le pourcentage rechargé à chaque arrêt n'est pas saisi : parcourir
+    l'intervalle demandé sur l'autonomie déclarée consomme exactement cette
+    fraction de batterie (20 km sur 100 km d'autonomie = 20 %), et la durée
+    s'en déduit (20 × 1 min 30 = 30 min par arrêt).
+  - Les arrêts recharge **ne sont pas des points du trajet** : la liste des
+    points reste celle de l'utilisateur, éditable comme d'habitude. Le
+    backend les intercale pour le calcul et les renvoie à part.
+  - Un arrêt inutile n'est pas placé : si la charge précédente suffit à
+    atteindre l'arrivée, il est supprimé. À l'inverse, une recharge due sans
+    borne à proximité (jusqu'à 20 km) est signalée plutôt que passée sous
+    silence, tout comme le plus long tronçon réellement parcouru sans
+    recharge — chaque détour par une borne rallonge le trajet, l'intervalle
+    demandé n'est donc pas tenu au mètre près.
+  - Les bornes lues sont mises en cache en base (une semaine) : seul le
+    premier trajet traversant une zone interroge data.gouv. Si le service est
+    indisponible, l'itinéraire est renvoyé sans arrêt recharge, avec un
+    message le disant — une panne de la base des bornes ne prive pas de
+    l'itinéraire.
 - **Itinéraires alternatifs** : pour un trajet à exactement 2 points
   (départ/arrivée), jusqu'à 3 tracés distincts proposés au choix.
   Désactivé tant qu'une zone à éviter ou une limite de vitesse
@@ -317,6 +345,13 @@ ajuster :
 | `CF_MAX_AVOID_ZONES` | `20` | Nombre maximal de zones à éviter par trajet |
 | `CF_MAX_ROUND_TRIP_DISTANCE_M` | `500000` | Distance cible maximale pour un circuit en boucle généré |
 | `CF_MAX_ROUND_TRIP_VIA_POINTS` | `20` | Nombre maximal de points de passage imposés à un circuit en boucle |
+| `CF_IRVE_API_URL` | API tabulaire data.gouv | Source des bornes de recharge (Base nationale des IRVE) |
+| `CF_IRVE_SEARCH_RADIUS_M` | `5000` | Rayon de recherche d'une borne autour du point où la recharge est due |
+| `CF_IRVE_MAX_DETOUR_M` | `20000` | Rayon élargi quand aucune borne n'est trouvée dans le rayon normal |
+| `CF_IRVE_CACHE_TTL_S` | `604800` | Durée de validité du cache local des bornes (7 jours) |
+| `CF_IRVE_CACHE_CELL_DEG` | `0.05` | Pas minimal de la grille de cache des bornes, en degrés |
+| `CF_IRVE_MAX_ROWS_PER_CELL` | `1000` | Lignes lues au maximum par cellule (l'API plafonne les pages à 200) |
+| `CF_MAX_CHARGING_STOPS` | `50` | Nombre maximal d'arrêts recharge insérés dans un trajet |
 | `CF_MAX_AVOID_ZONE_RADIUS_M` | `20000` | Rayon maximal d'une zone à éviter |
 | `CF_MAX_GPX_UPLOAD_BYTES` | `5000000` | Taille maximale d'un fichier GPX importé |
 | `CF_MAX_REQUEST_BODY_BYTES` | `10000000` | Taille maximale d'un corps de requête, refusée en 413 avant sa lecture complète |
@@ -576,6 +611,14 @@ tracé par chaque étape d'un itinéraire classique a été vérifié contre
 l'instance réelle (calcul à 3 points : chaque point demandé se retrouve dans
 la géométrie renvoyée, à la distance d'accrochage au réseau routier près, et
 les bornes de legs tombent bien dessus).
+
+Mode électrique vérifié contre l'instance réelle et la vraie base IRVE :
+Lyon → Grenoble (125 km, autonomie 100 km, recharge tous les 20 km) produit
+cinq arrêts à des bornes existantes, espacés de 20 à 23 km, pour 2 h 30 de
+recharge cumulée — l'écart à l'intervalle demandé vient des détours par les
+bornes, et est renvoyé au client (`charging_max_gap_m`). Le premier calcul
+dans une zone inconnue prend environ une seconde (appels à data.gouv menés de
+front), les suivants sont immédiats grâce au cache en base.
 
 **Non vérifié dans cet environnement** : l'accès depuis un second appareil
 physique du LAN (un seul appareil disponible pour les vérifications) —

@@ -46,6 +46,34 @@ class Settings(BaseSettings):
     # max_gpx_upload_bytes.
     max_request_body_bytes: int = Field(default=10_000_000, gt=0)
 
+    # --- Véhicule électrique / bornes de recharge (IRVE) ---
+    # "Base nationale des IRVE" sur data.gouv.fr (Licence Ouverte), interrogée
+    # via l'API tabulaire : filtrage par cadre géographique, donc pas besoin
+    # de télécharger le fichier consolidé (plus de 150 Mo). Les stations lues
+    # sont mises en cache en base, cellule par cellule.
+    irve_api_url: str = (
+        "https://tabular-api.data.gouv.fr/api/resources/eb76d20a-8501-400e-b336-d85724de5435/data/"
+    )
+    irve_user_agent: str = "circuit-forgery/0.1 (usage local non commercial)"
+    # L'API plafonne page_size à 200 : ce budget borne le nombre de requêtes
+    # par cellule (5 pages), donc la latence du premier passage dans une zone.
+    irve_max_rows_per_cell: int = Field(default=1000, ge=200)
+    # Côté de la grille de cache, en degrés (~5,5 km en latitude). Deux points
+    # de recharge proches tombent dans la même cellule et partagent donc un
+    # seul appel à data.gouv.
+    irve_cache_cell_deg: float = Field(default=0.05, gt=0, le=1)
+    # Au-delà, une cellule est réinterrogée : le parc de bornes bouge, mais
+    # pas au point de justifier un appel par calcul d'itinéraire.
+    irve_cache_ttl_s: int = Field(default=7 * 24 * 3600, ge=0)
+    # Distance maximale acceptée entre le point du tracé où la recharge est
+    # due et la borne retenue. Élargie jusqu'à irve_max_detour_m quand la
+    # première recherche ne donne rien (zone rurale).
+    irve_search_radius_m: float = Field(default=5_000, gt=0)
+    irve_max_detour_m: float = Field(default=20_000, gt=0)
+    # Garde-fou : un trajet très long avec un intervalle très court
+    # demanderait sinon des centaines d'appels et autant de détours.
+    max_charging_stops: int = Field(default=50, ge=1)
+
     nominatim_url: str = "https://nominatim.openstreetmap.org"
     # Ces deux réglages découlent de la politique d'usage de Nominatim :
     # User-Agent identifiant obligatoire, ~1 requête/s maximum.

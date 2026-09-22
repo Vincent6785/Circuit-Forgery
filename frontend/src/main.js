@@ -20,6 +20,9 @@ import { initGpxController } from "./controllers/gpx-controller.js";
 import { initRoundTripController } from "./controllers/round-trip-controller.js";
 import { initAvoidZoneController } from "./controllers/avoid-zone-controller.js";
 import { initSpeedLimitController } from "./controllers/speed-limit-controller.js";
+import { initEvController } from "./controllers/ev-controller.js";
+import { ChargingStopLayer } from "./map/charging-stop-layer.js";
+import { DEFAULT_EV_SETTINGS } from "./utils/ev.js";
 import { initRouteAlternatives } from "./ui/route-alternatives.js";
 import { initBusyIndicator } from "./ui/busy-indicator.js";
 import { initSidebarToggle } from "./ui/sidebar-toggle.js";
@@ -55,6 +58,8 @@ const store = createStore({
   noSpeedLimit: false, // true = profil sans exclusion de vitesse
   pendingForcedPoints: [], // liste de {lat, lon} — points de passage imposés à la prochaine génération de circuit en boucle
   roundTripVariant: null, // {start: {lat, lon}, distanceM} | null — dernier circuit en boucle généré avec succès, pour "Nouvelle variante"
+  evEnabled: false, // true = véhicule électrique : le backend insère des arrêts recharge
+  evSettings: { ...DEFAULT_EV_SETTINGS }, // {autonomyKm, rechargeIntervalKm, secondsPerPercent} — conservés même décochés
 });
 
 const history = createHistory();
@@ -71,6 +76,8 @@ if (import.meta.env.DEV || import.meta.env.VITE_E2E_HOOKS === "true") {
     speedLimitKmh: store.getState().speedLimitKmh,
     noSpeedLimit: store.getState().noSpeedLimit,
   });
+  window.__getEv = () => ({ evEnabled: store.getState().evEnabled, evSettings: store.getState().evSettings });
+  window.__getChargingStops = () => store.getState().computedRoute?.charging_stops ?? [];
 }
 
 const draftAutosave = initDraftAutosave(store);
@@ -81,10 +88,13 @@ window.addEventListener("pagehide", () => draftAutosave.flush());
 // Indicateur "Calcul en cours…" partagé par toutes les opérations attendues.
 const trackBusy = initBusyIndicator();
 
+const chargingStopLayer = new ChargingStopLayer(map);
+
 const { recomputeAndRender, waitForRecompute } = initRouteController({
   store,
   waypointManager,
   routeLayer,
+  chargingStopLayer,
   draftAutosave,
   trackBusy,
 });
@@ -93,6 +103,7 @@ initGpxController({ store, waypointManager, waitForRecompute, trackBusy });
 initRoundTripController({ map, store, waypointManager, waitForRecompute, trackBusy });
 initAvoidZoneController({ map, store, waypointManager, history });
 initSpeedLimitController({ store });
+initEvController({ store });
 initRouteOptionsSummary(store);
 initRouteAlternatives({ store, routeLayer, trackBusy });
 initSidebarToggle({ map });
@@ -139,6 +150,8 @@ if (draft && draft.waypoints?.length > 0) {
       pendingForcedPoints: restoredForcedPoints(draft),
       roundTripVariant: draft.roundTripVariant ?? null,
       editingRouteId: draft.editingRouteId ?? null,
+      evEnabled: draft.evEnabled ?? false,
+      evSettings: draft.evSettings ?? { ...DEFAULT_EV_SETTINGS },
     }
   );
   // Un tracé enregistré pour un autre nombre de points (brouillon écrit par
