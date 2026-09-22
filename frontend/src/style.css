@@ -370,6 +370,7 @@ kbd {
 #saved-routes-list,
 #poi-list,
 #avoid-zone-list,
+#round-trip-forced-point-list,
 #alternatives-list {
   list-style: none;
   margin: 0.5rem 0 0;
@@ -379,6 +380,7 @@ kbd {
 #saved-routes-list li,
 #poi-list li,
 #avoid-zone-list li,
+#round-trip-forced-point-list li,
 #alternatives-list li {
   padding: 0.4rem 0.2rem;
   border-bottom: 1px solid #eee;
@@ -391,6 +393,7 @@ kbd {
 #saved-routes-list li:hover,
 #poi-list li:hover,
 #avoid-zone-list li:hover,
+#round-trip-forced-point-list li:hover,
 #alternatives-list li:hover {
   background: #f0f0f0;
 }
@@ -456,8 +459,12 @@ button.confirm-pending {
   color: white;
 }
 
-#round-trip-cancel-btn,
-#round-trip-forced-point-clear-btn {
+#round-trip-forced-point-btn.active {
+  background: #6a1b9a;
+  color: white;
+}
+
+#round-trip-cancel-btn {
   display: inline;
   width: auto;
   margin: 0 0 0 0.3rem;
@@ -482,7 +489,8 @@ button.confirm-pending {
    occupant alors plusieurs centaines de pixels de hauteur. */
 #saved-routes-list li > span,
 #poi-list li > span,
-#avoid-zone-list li > span {
+#avoid-zone-list li > span,
+#round-trip-forced-point-list li > span {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -492,7 +500,8 @@ button.confirm-pending {
 
 #saved-routes-list li > span > button,
 #poi-list li > span > button,
-#avoid-zone-list li > span > button {
+#avoid-zone-list li > span > button,
+#round-trip-forced-point-list li > span > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;

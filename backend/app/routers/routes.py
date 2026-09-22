@@ -26,7 +26,8 @@ from app.schemas.route import (
 from app.services.geo_sampling import subsample_indices
 from app.services.graphhopper_client import graphhopper_client
 from app.services.route_enrichment import path_to_response
-from app.services.waypoint_validation import validate_avoid_zones, validate_waypoints
+from app.services.via_points import insert_via_points
+from app.services.waypoint_validation import validate_avoid_zones, validate_via_points, validate_waypoints
 
 # Les erreurs du domaine (règle métier, itinéraire impossible, moteur
 # indisponible) sont traduites en réponses HTTP par app/core/errors.py.
@@ -82,6 +83,7 @@ async def compute_route(body: ComputeRouteRequest):
 @router.post("/round-trip", response_model=ComputeRouteResponse)
 async def compute_round_trip(body: RoundTripRequest):
     validate_waypoints([body.start])
+    validate_via_points(body.via_points)
     validate_avoid_zones(body.avoid_zones)
     if body.distance_m > settings.max_round_trip_distance_m:
         raise HTTPException(400, f"Distance de circuit trop grande (max {settings.max_round_trip_distance_m} m)")
@@ -99,8 +101,11 @@ async def compute_round_trip(body: RoundTripRequest):
     # Laisse volontairement un emplacement libre sous settings.max_waypoints :
     # un circuit généré pile au plafond ne tolérerait plus aucune mutation
     # ultérieure (ajouter un point à la main, par exemple), qui échouerait
-    # aussitôt sur ce même plafond via /compute.
-    round_trip_target = max(2, settings.max_waypoints - 1)
+    # aussitôt sur ce même plafond via /compute. Les points de passage imposés
+    # sont ajoutés à cette séquence juste en dessous : autant d'emplacements
+    # en moins, sans quoi un circuit dense assorti de plusieurs points de
+    # passage dépassait le plafond et faisait échouer son propre recalcul.
+    round_trip_target = max(2, settings.max_waypoints - 1 - len(body.via_points))
     indices = subsample_indices(len(raw_coordinates), round_trip_target)
     # [lon, lat] ou [lon, lat, altitude] : l'altitude éventuelle est ignorée.
     waypoints = [WaypointOut(lat=raw_coordinates[i][1], lon=raw_coordinates[i][0]) for i in indices]
@@ -110,6 +115,15 @@ async def compute_round_trip(body: RoundTripRequest):
     # correspondaient donc pas aux waypoints renvoyés.
     response = path_to_response(path, waypoints=waypoints, leg_boundaries=indices)
     response.simplified = len(raw_coordinates) > round_trip_target
+    if body.via_points:
+        # Les points de passage ne sont pas sur le tracé généré (ils ont été
+        # choisis avant même que le circuit existe) : ils n'ont donc pas
+        # d'index dans sa géométrie, et les bornes de legs ne décrivent plus
+        # les waypoints renvoyés. Le frontend recalcule de toute façon
+        # l'itinéraire à travers ces points dès qu'il les reçoit (POST
+        # /compute), ce qui produit des bornes cohérentes.
+        response.waypoints = insert_via_points(waypoints, body.via_points)
+        response.leg_boundaries = []
     return response
 
 

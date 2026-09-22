@@ -1,9 +1,8 @@
-import math
 from typing import Optional
 
 from app.schemas.route import ComputeRouteResponse, WaypointOut
 
-from app.services.geo import EARTH_RADIUS_M as _EARTH_RADIUS_M  # noqa: E402
+from app.services.geo import haversine_m  # noqa: E402
 
 
 def _expand_detail(detail: list, num_points: int) -> list[Optional[object]]:
@@ -44,14 +43,7 @@ def _leg_boundaries(coordinates: list, snapped_waypoints: list) -> list[int]:
 
 def _haversine_m(a: list, b: list) -> float:
     # [lon, lat] ou [lon, lat, altitude] : l'altitude éventuelle est ignorée.
-    lon1, lat1 = a[0], a[1]
-    lon2, lat2 = b[0], b[1]
-    d_lat = math.radians(lat2 - lat1)
-    d_lon = math.radians(lon2 - lon1)
-    h = math.sin(d_lat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(
-        d_lon / 2
-    ) ** 2
-    return 2 * _EARTH_RADIUS_M * math.asin(math.sqrt(h))
+    return haversine_m(a[1], a[0], b[1], b[0])
 
 
 def _cumulative_distance_m(coordinates: list) -> list[float]:

@@ -86,13 +86,15 @@
             <button id="round-trip-variant-btn" title="Générer une autre variante à la même distance" disabled>
               🔀 Autre variante
             </button>
-            <button id="round-trip-forced-point-btn" title="Définir un point que le circuit généré devra traverser">
-              📍 Point de passage
+            <button id="round-trip-forced-point-btn" type="button" aria-pressed="false" title="Cliquer sur la carte les points que le circuit généré devra traverser">
+              📍 Points de passage
             </button>
-            <p id="round-trip-forced-point-status" class="hint hidden">
-              Point de passage défini pour la prochaine génération.
-              <button id="round-trip-forced-point-clear-btn" type="button">✕ Retirer</button>
-            </p>
+            <div id="round-trip-forced-point-panel" class="subpanel hidden">
+              <h3>Points de passage imposés</h3>
+              <p class="hint">Le circuit généré traversera ces points, dans cet ordre.</p>
+              <ul id="round-trip-forced-point-list"></ul>
+              <button id="round-trip-forced-point-clear-btn" type="button">✕ Tout retirer</button>
+            </div>
             <p id="round-trip-hint" class="hint hidden" role="status">
               <span id="round-trip-hint-text">Cliquez un point de départ sur la carte…</span>
               <button id="round-trip-cancel-btn" type="button">Annuler (Échap)</button>

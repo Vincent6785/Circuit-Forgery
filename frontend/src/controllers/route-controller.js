@@ -160,7 +160,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         avoidZones: [],
         speedLimitKmh: null,
         noSpeedLimit: false,
-        pendingForcedPoint: null,
+        pendingForcedPoints: [],
         roundTripVariant: null,
       }
     );
@@ -327,7 +327,7 @@ export function initRouteController({ store, waypointManager, routeLayer, draftA
         avoidZones: fromApiAvoidZones(route.avoid_zones),
         speedLimitKmh: route.speed_limit_kmh ?? null,
         noSpeedLimit: route.no_speed_limit || false,
-        pendingForcedPoint: null,
+        pendingForcedPoints: [],
         roundTripVariant: null,
       }
     );

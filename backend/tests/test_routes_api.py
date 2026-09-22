@@ -154,6 +154,109 @@ def test_round_trip_reserves_headroom_under_max_waypoints(client, monkeypatch):
     assert follow_up.status_code == 200
 
 
+def test_round_trip_inserts_via_points_in_the_generated_circuit(client, monkeypatch):
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
+        return _fake_path(distance=20000.0)
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
+
+    resp = client.post(
+        "/api/routes/round-trip",
+        json={
+            "start": {"lat": 48.85, "lon": 2.35},
+            "distance_m": 20000,
+            "via_points": [{"lat": 48.87, "lon": 2.34}, {"lat": 48.90, "lon": 2.40}],
+        },
+    )
+    assert resp.status_code == 200
+    waypoints = [(w["lat"], w["lon"]) for w in resp.json()["waypoints"]]
+    assert (48.87, 2.34) in waypoints
+    assert (48.90, 2.40) in waypoints
+
+
+def test_round_trip_leg_boundaries_dropped_when_via_points_are_inserted(client, monkeypatch):
+    # Les points de passage ne sont pas sur le tracé généré : garder les
+    # bornes de legs décrivant les seuls waypoints échantillonnés les aurait
+    # laissées décalées d'un cran par point inséré, donc fausses.
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
+        return _fake_path(distance=20000.0)
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
+
+    resp = client.post(
+        "/api/routes/round-trip",
+        json={
+            "start": {"lat": 48.85, "lon": 2.35},
+            "distance_m": 20000,
+            "via_points": [{"lat": 48.87, "lon": 2.34}],
+        },
+    )
+    assert resp.json()["leg_boundaries"] == []
+
+
+def test_round_trip_reserves_room_for_via_points_under_max_waypoints(client, monkeypatch):
+    # Régression : l'échantillonnage visait max_waypoints - 1 sans tenir
+    # compte des points de passage ajoutés ensuite — un circuit dense assorti
+    # de plusieurs points de passage dépassait le plafond, et le recalcul
+    # automatique déclenché juste après échouait en "Trop de waypoints".
+    dense_coords = [[2.35 + i * 0.0001, 48.85 + i * 0.0001] for i in range(settings.max_waypoints * 5)]
+    via_points = [{"lat": 48.80 + i * 0.01, "lon": 2.30} for i in range(5)]
+
+    async def fake_round_trip(
+        start, distance_m, seed=None, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False
+    ):
+        return _fake_path(distance=20000.0, coords=dense_coords)
+
+    async def fake_route(points, profile=None, avoid_zones=None, speed_limit_kmh=None, no_speed_limit=False):
+        return _fake_path(distance=20000.0, coords=[[2.35, 48.85], [2.36, 48.86]])
+
+    monkeypatch.setattr(routes_module.graphhopper_client, "route_round_trip", fake_round_trip)
+    monkeypatch.setattr(routes_module.graphhopper_client, "route", fake_route)
+
+    resp = client.post(
+        "/api/routes/round-trip",
+        json={"start": {"lat": 48.85, "lon": 2.35}, "distance_m": 20000, "via_points": via_points},
+    )
+    waypoints = resp.json()["waypoints"]
+    assert len(waypoints) < settings.max_waypoints  # marge conservée malgré les points de passage
+
+    follow_up = client.post(
+        "/api/routes/compute",
+        json={"waypoints": [{"lat": w["lat"], "lon": w["lon"]} for w in waypoints]},
+    )
+    assert follow_up.status_code == 200
+
+
+def test_round_trip_rejects_via_point_outside_france(client):
+    resp = client.post(
+        "/api/routes/round-trip",
+        json={
+            "start": {"lat": 48.85, "lon": 2.35},
+            "distance_m": 20000,
+            "via_points": [{"lat": 60.0, "lon": 2.35}],
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_round_trip_rejects_too_many_via_points(client):
+    resp = client.post(
+        "/api/routes/round-trip",
+        json={
+            "start": {"lat": 48.85, "lon": 2.35},
+            "distance_m": 20000,
+            "via_points": [
+                {"lat": 48.85, "lon": 2.35} for _ in range(settings.max_round_trip_via_points + 1)
+            ],
+        },
+    )
+    assert resp.status_code == 400
+
+
 def test_round_trip_passes_avoid_zones_to_graphhopper_client(client, monkeypatch):
     # Régression : RoundTripRequest n'avait pas de champ avoid_zones, la
     # génération de circuit ignorait donc totalement les zones à éviter déjà

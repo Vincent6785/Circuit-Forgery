@@ -76,15 +76,27 @@ export function computeRoute(waypoints, avoidZones = [], speedLimitKmh = null, n
  * @param {AvoidZone[]} [avoidZones]
  * @param {number | null} [speedLimitKmh]
  * @param {boolean} [noSpeedLimit]
+ * @param {WaypointInput[]} [viaPoints] Points que le circuit doit traverser ;
+ *   le backend les insère dans les waypoints renvoyés (ils ne peuvent pas
+ *   être imposés à l'algorithme round_trip lui-même).
  * @returns {Promise<ComputeRouteResponse>}
  */
-export function computeRoundTrip(start, distanceM, seed, avoidZones = [], speedLimitKmh = null, noSpeedLimit = false) {
+export function computeRoundTrip(
+  start,
+  distanceM,
+  seed,
+  avoidZones = [],
+  speedLimitKmh = null,
+  noSpeedLimit = false,
+  viaPoints = []
+) {
   return _postJson(
     "/api/routes/round-trip",
     {
       start,
       distance_m: distanceM,
       seed,
+      via_points: viaPoints.map((p) => ({ lat: p.lat, lon: p.lon })),
       avoid_zones: toApiAvoidZones(avoidZones),
       speed_limit_kmh: speedLimitKmh,
       no_speed_limit: noSpeedLimit,

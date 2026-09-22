@@ -7,6 +7,22 @@ publie les images Docker correspondantes.
 
 ## [Non publié]
 
+### Ajouté
+
+- Circuit en boucle : plusieurs points de passage imposés au lieu d'un seul.
+  Le mode de pose reste actif d'un clic à l'autre, les points sont listés dans
+  la sidebar (numérotés dans l'ordre de traversée) et retirables un par un ou
+  d'un coup, et le circuit généré les traverse tous en plus du point de
+  départ/arrivée. Nouveau champ `via_points` sur `POST /api/routes/round-trip`
+  et nouveau réglage `CF_MAX_ROUND_TRIP_VIA_POINTS` (20 par défaut).
+
+### Corrigé
+
+- Circuit en boucle : les points de passage consomment désormais des
+  emplacements réservés sous `CF_MAX_WAYPOINTS`. Un circuit dense assorti de
+  points de passage dépassait sinon cette limite, et le recalcul déclenché
+  juste après la génération échouait en "Trop de waypoints".
+
 ## [0.1.0] - 2026-09-14
 
 ### Ajouté

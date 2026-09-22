@@ -10,7 +10,7 @@ let autosave;
 
 beforeEach(() => {
   vi.useFakeTimers();
-  store = createStore({ waypoints: [], computedRoute: null, editingRouteId: null, pendingForcedPoint: null });
+  store = createStore({ waypoints: [], computedRoute: null, editingRouteId: null, pendingForcedPoints: [] });
   saved = [];
   autosave = initDraftAutosave(store, { debounceMs: DEBOUNCE_MS, save: (state) => saved.push(state) });
 });
@@ -55,7 +55,7 @@ describe("initDraftAutosave", () => {
   it("ne relance pas la sauvegarde pour une clé silencieuse non suivie", () => {
     store.setState({ waypoints: [{ id: 1 }] }, { userChange: true });
     vi.advanceTimersByTime(DEBOUNCE_MS);
-    store.setState({ pendingForcedPoint: { lat: 1, lon: 2 } });
+    store.setState({ pendingForcedPoints: [{ lat: 1, lon: 2 }] });
     vi.advanceTimersByTime(DEBOUNCE_MS);
     expect(saved).toHaveLength(1);
   });

@@ -78,13 +78,20 @@ d'attribution — distincte de la licence du code.
   se quitte sans rien créer via Échap ou le lien "Annuler" affiché pendant
   l'attente. Quand le tracé généré est trop dense pour tenir dans la limite
   de waypoints, un bandeau signale que la boucle affichée est une version
-  simplifiée du tracé réel calculé par GraphHopper. Un **point de passage**
-  optionnel ("📍 Point de passage" puis clic sur la carte) force le circuit
-  généré à traverser cet endroit — GraphHopper n'acceptant qu'un seul point
-  pour `round_trip`, le point choisi est inséré après coup dans la séquence
-  de waypoints (à l'emplacement qui minimise le détour), puis routé
+  simplifiée du tracé réel calculé par GraphHopper. Des **points de passage**
+  optionnels ("📍 Points de passage" puis clics sur la carte — le mode reste
+  actif pour en enchaîner plusieurs, Échap ou "Terminer" en sort) forcent le
+  circuit généré à traverser ces endroits en plus du point de départ, qui est
+  aussi le point d'arrivée. Ils sont listés dans la sidebar et retirables un
+  par un ou d'un coup. GraphHopper n'acceptant qu'un seul point pour
+  `round_trip`, ces points sont envoyés au backend (`via_points`), qui les
+  insère dans la séquence de waypoints du circuit obtenu (chacun à
+  l'emplacement qui minimise le détour) avant que le tracé ne soit routé
   normalement ; la distance affichée n'est alors plus garantie de coller
-  précisément à la distance cible.
+  précisément à la distance cible. Le backend réserve autant d'emplacements
+  que de points de passage sous `CF_MAX_WAYPOINTS` en échantillonnant le
+  circuit d'autant moins finement, pour que le recalcul qui suit ne bute pas
+  sur cette limite.
 - **Itinéraires alternatifs** : pour un trajet à exactement 2 points
   (départ/arrivée), jusqu'à 3 tracés distincts proposés au choix.
   Désactivé tant qu'une zone à éviter ou une limite de vitesse
@@ -309,6 +316,7 @@ ajuster :
 | `CF_MAX_WAYPOINTS` | `100` | Nombre maximal de points par trajet (protège la complexité des requêtes GraphHopper) |
 | `CF_MAX_AVOID_ZONES` | `20` | Nombre maximal de zones à éviter par trajet |
 | `CF_MAX_ROUND_TRIP_DISTANCE_M` | `500000` | Distance cible maximale pour un circuit en boucle généré |
+| `CF_MAX_ROUND_TRIP_VIA_POINTS` | `20` | Nombre maximal de points de passage imposés à un circuit en boucle |
 | `CF_MAX_AVOID_ZONE_RADIUS_M` | `20000` | Rayon maximal d'une zone à éviter |
 | `CF_MAX_GPX_UPLOAD_BYTES` | `5000000` | Taille maximale d'un fichier GPX importé |
 | `CF_MAX_REQUEST_BODY_BYTES` | `10000000` | Taille maximale d'un corps de requête, refusée en 413 avant sa lecture complète |
@@ -559,11 +567,15 @@ sauvegarde → rechargement, y compris les cas d'erreur de routage). Limite
 de vitesse personnalisable vérifiée contre un cas réel concret (Pont de
 Normandie, `max_speed > 80` donc exclu par défaut) : 91 km de détour par
 défaut, ~70 km avec "Aucune limite" une fois le profil `moto_no_limit`
-importé et vérifié fonctionnel. Point de passage du circuit en boucle
-vérifié après confirmation empirique que `algorithm=round_trip` rejette
+importé et vérifié fonctionnel. Points de passage du circuit en boucle
+vérifiés après confirmation empirique que `algorithm=round_trip` rejette
 tout appel avec plus d'un point ("For round trip calculation exactly one
 point is required") — d'où l'insertion après coup dans la séquence de
-waypoints plutôt qu'un envoi direct à GraphHopper.
+waypoints plutôt qu'un envoi direct à GraphHopper. Le passage effectif du
+tracé par chaque étape d'un itinéraire classique a été vérifié contre
+l'instance réelle (calcul à 3 points : chaque point demandé se retrouve dans
+la géométrie renvoyée, à la distance d'accrochage au réseau routier près, et
+les bornes de legs tombent bien dessus).
 
 **Non vérifié dans cet environnement** : l'accès depuis un second appareil
 physique du LAN (un seul appareil disponible pour les vérifications) —

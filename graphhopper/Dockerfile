@@ -1,7 +1,7 @@
 # Image de base épinglée par digest ; Dependabot (écosystème docker) en propose
 # les mises à jour. Pas de syntaxe propre à BuildKit : l'image doit aussi se
 # construire avec le builder classique de Docker.
-FROM eclipse-temurin:21-jre-noble@sha256:d35199d74a3b2dff1bfb435d9adde4ef974e74a7d2a4fcb3079063c55926edb5
+FROM eclipse-temurin:25-jre-noble@sha256:d120abd9d8d7dec94520ce974ece62d0e4eed8576eb00bbc84e6128307ab48ef
 
 ARG GRAPHHOPPER_VERSION=11.0
 # SHA-256 du jar publié sur la release GitHub : un téléchargement altéré, ou un

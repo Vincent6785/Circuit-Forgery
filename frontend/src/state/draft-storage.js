@@ -19,7 +19,7 @@ export function serializeDraft(state) {
     avoidZones: state.avoidZones,
     speedLimitKmh: state.speedLimitKmh,
     noSpeedLimit: state.noSpeedLimit,
-    pendingForcedPoint: state.pendingForcedPoint,
+    pendingForcedPoints: state.pendingForcedPoints,
     roundTripVariant: state.roundTripVariant,
     // Sans ça, recharger la page pendant la modification d'un trajet
     // sauvegardé le restaurait comme un nouveau trajet : "Sauvegarder" créait
