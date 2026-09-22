@@ -18,7 +18,10 @@ export async function importGpx(file) {
 /**
  * GPX du trajet courant, sauvegardé ou non.
  *
- * @param {{ name: string | null, waypoints: Array<{ lat: number, lon: number, label?: string | null }>, geometry_geojson: object }} route
+ * `charging_stops` : arrêts recharge du tracé courant, exportés en <wpt>
+ * (repères) et non en <rtept> — ce ne sont pas des points du trajet.
+ *
+ * @param {{ name: string | null, waypoints: Array<{ lat: number, lon: number, label?: string | null }>, geometry_geojson: object, charging_stops?: Array<object> }} route
  * @returns {Promise<Blob>}
  */
 export async function exportRouteGpx(route) {

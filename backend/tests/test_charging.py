@@ -9,7 +9,7 @@ from app.services.charging_plan import (
     validate_ev,
 )
 from app.services.errors import InvalidInputError
-from app.services.irve_client import group_rows_into_stations
+from app.services.irve_client import clean_station_name, group_rows_into_stations
 
 # --- Découpage du trajet en arrêts -----------------------------------------
 
@@ -125,6 +125,30 @@ def test_two_wheeler_flag_is_kept_when_any_point_declares_it():
 
 def test_station_falls_back_to_a_default_name():
     assert group_rows_into_stations([_row(nom_station="  ")])[0].name == "Borne de recharge"
+    # Nom entièrement réduit à un identifiant opaque : générique plutôt que
+    # "/1958003911017570306" sur l'écran du GPS.
+    assert group_rows_into_stations([_row(nom_station="/1958003911017570306")])[0].name == "Borne de recharge"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # Cas réellement rencontrés dans la source : un identifiant technique
+        # collé au nom d'exploitant, illisible une fois exporté en GPX.
+        ("Réseau eborn/1ef35a80-ba8c-57bd-b322-5126b618d3f6", "Réseau eborn"),
+        ("Eranovum e-Mobility France SAS/69b28106e4f1916dc5cb0b72", "Eranovum e-Mobility France SAS"),
+        ("FR*Y55/1958003911017570306", "FR*Y55"),
+        # Noms légitimes : intacts, barre oblique comprise.
+        ("31 Rue de la Poste", "31 Rue de la Poste"),
+        ("GRENOBLE - Parking Montorge", "GRENOBLE - Parking Montorge"),
+        ("Parking Nord/Sud", "Parking Nord/Sud"),
+        ("A6/A7", "A6/A7"),
+        # Suffixe long mais sans chiffre : un vrai mot, pas un identifiant.
+        ("Mairie/Stationnement", "Mairie/Stationnement"),
+    ],
+)
+def test_clean_station_name(raw, expected):
+    assert clean_station_name(raw) == expected
 
 
 def test_max_charging_stops_setting_is_a_positive_bound():

@@ -11,6 +11,7 @@ from app.db.models import Route
 from app.db.session import get_db
 from app.schemas.route import GpxExportRequest, GpxImportResponse, WaypointOut
 from app.services.gpx import build_gpx, parse_gpx
+from app.services.route_storage import charging_stops_from_json
 from app.services.waypoint_validation import validate_waypoints
 
 router = APIRouter(prefix="/api", tags=["gpx"])
@@ -33,7 +34,9 @@ def export_gpx(route_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Trajet introuvable")
     waypoints = [WaypointOut(**wp) for wp in json.loads(route.waypoints_json)]
     geometry = json.loads(route.geometry_geojson)
-    gpx_xml = build_gpx(route.name, waypoints, geometry)
+    gpx_xml = build_gpx(
+        route.name, waypoints, geometry, charging_stops_from_json(route.charging_stops_json)
+    )
     return Response(
         content=gpx_xml,
         media_type="application/gpx+xml",
@@ -47,7 +50,7 @@ def export_current_route_gpx(body: GpxExportRequest):
     format que l'export d'un trajet sauvegardé."""
     validate_waypoints(body.waypoints)
     name = body.name or "trajet"
-    gpx_xml = build_gpx(name, body.waypoints, body.geometry_geojson.model_dump())
+    gpx_xml = build_gpx(name, body.waypoints, body.geometry_geojson.model_dump(), body.charging_stops)
     return Response(
         content=gpx_xml,
         media_type="application/gpx+xml",

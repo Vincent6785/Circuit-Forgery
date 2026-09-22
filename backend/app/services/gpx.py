@@ -1,11 +1,12 @@
 import math
 import re
 import xml.etree.ElementTree as ET
+from typing import Optional
 
 from defusedxml.common import DefusedXmlException
 from defusedxml.ElementTree import fromstring as defused_fromstring
 
-from app.schemas.route import MAX_LABEL_LENGTH, Waypoint, WaypointOut
+from app.schemas.route import MAX_LABEL_LENGTH, ChargingStopOut, Waypoint, WaypointOut
 from app.services.geo_sampling import subsample
 
 GPX_NS = "http://www.topografix.com/GPX/1/1"
@@ -26,14 +27,69 @@ def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def build_gpx(name: str, waypoints: list[WaypointOut], geometry_geojson: dict) -> str:
+def _format_duration(seconds: float) -> str:
+    """Durée lisible dans la description d'un arrêt — miroir de
+    `formatDuration` côté frontend (ui/sidebar.js)."""
+    minutes = round(max(0.0, seconds) / 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} h {minutes:02d} min" if hours else f"{minutes} min"
+
+
+def _charging_stop_description(stop: ChargingStopOut) -> str:
+    parts = []
+    specs = []
+    if stop.power_kw:
+        specs.append(f"{stop.power_kw:g} kW")
+    if stop.point_count > 1:
+        specs.append(f"{stop.point_count} points de charge")
+    if specs:
+        parts.append(" · ".join(specs))
+    parts.append(f"Recharge {stop.charge_percent:.0f} % — {_format_duration(stop.charge_duration_s)}")
+    parts.append(f"À {stop.route_distance_m / 1000:.1f} km du départ")
+    if stop.address:
+        parts.append(stop.address)
+    return " | ".join(parts)
+
+
+def _charging_stop_lines(stops: list[ChargingStopOut]) -> list[str]:
+    """Arrêts recharge en <wpt> (points d'intérêt GPX).
+
+    Pas en <rtept> : ce ne sont pas des points du trajet, et les y placer les
+    transformerait en étapes de l'utilisateur au réimport (parse_gpx lit
+    <rte>/<rtept> en priorité). En <wpt>, ils s'affichent comme des repères
+    sur les appareils et applications, et notre propre import les ignore.
+    """
+    lines = []
+    for index, stop in enumerate(stops):
+        label = f"{index + 1}. {stop.name}"
+        lines.append(f'  <wpt lat="{stop.lat:.6f}" lon="{stop.lon:.6f}">')
+        lines.append(f"    <name>{_escape(label)}</name>")
+        lines.append(f"    <desc>{_escape(_charging_stop_description(stop))}</desc>")
+        lines.append("    <type>charging-station</type>")
+        lines.append("  </wpt>")
+    return lines
+
+
+def build_gpx(
+    name: str,
+    waypoints: list[WaypointOut],
+    geometry_geojson: dict,
+    charging_stops: Optional[list[ChargingStopOut]] = None,
+) -> str:
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         f'<gpx version="1.1" creator="circuit-forgery" xmlns="{GPX_NS}">',
         f"  <metadata><name>{_escape(name)}</name></metadata>",
-        "  <rte>",
-        f"    <name>{_escape(name)}</name>",
     ]
+    # Le schéma GPX 1.1 impose l'ordre metadata, wpt*, rte*, trk* : les arrêts
+    # recharge doivent donc précéder l'itinéraire, pas le suivre.
+    lines.extend(_charging_stop_lines(charging_stops or []))
+    lines.extend(
+        [
+            "  <rte>",
+            f"    <name>{_escape(name)}</name>",
+        ]
+    )
     for i, wp in enumerate(waypoints):
         label = wp.label or f"Point {i + 1}"
         lines.append(

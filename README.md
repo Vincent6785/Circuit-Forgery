@@ -120,6 +120,17 @@ d'attribution — distincte de la licence du code.
     indisponible, l'itinéraire est renvoyé sans arrêt recharge, avec un
     message le disant — une panne de la base des bornes ne prive pas de
     l'itinéraire.
+  - **Export GPX** : les arrêts sortent en `<wpt>` (repères), avec le nom de
+    la borne, sa puissance, le nombre de points de charge, le pourcentage et
+    la durée de recharge, et la distance depuis le départ. Pas en `<rtept>` —
+    ce ne sont pas des points du trajet, et les y mettre les transformerait en
+    étapes de l'utilisateur au réimport. Le tracé exporté (`<trk>`) passe déjà
+    par les bornes. Un trajet sauvegardé conserve ses arrêts, pour que son
+    export décrive bien les bornes par lesquelles passe la géométrie
+    enregistrée plutôt que celles d'un recalcul ultérieur.
+  - La source publie parfois un identifiant technique en guise de nom de
+    station (`Réseau eborn/1ef35a80-ba8c-57bd-…`) : le suffixe opaque est
+    retiré à la lecture, pour que le GPS affiche `Réseau eborn`.
 - **Itinéraires alternatifs** : pour un trajet à exactement 2 points
   (départ/arrivée), jusqu'à 3 tracés distincts proposés au choix.
   Désactivé tant qu'une zone à éviter ou une limite de vitesse

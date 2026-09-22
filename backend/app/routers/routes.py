@@ -16,7 +16,6 @@ from app.schemas.route import (
     AvoidZone,
     ComputeRouteRequest,
     ComputeRouteResponse,
-    EvSettings,
     RouteCreate,
     RouteOut,
     RouteSummaryOut,
@@ -28,6 +27,12 @@ from app.services.charging_route import route_with_charging
 from app.services.geo_sampling import subsample_indices
 from app.services.graphhopper_client import graphhopper_client
 from app.services.route_enrichment import path_to_response
+from app.services.route_storage import (
+    charging_stops_from_json,
+    charging_stops_to_json,
+    ev_from_json,
+    ev_to_json,
+)
 from app.services.via_points import insert_via_points
 from app.services.waypoint_validation import validate_avoid_zones, validate_via_points, validate_waypoints
 
@@ -41,21 +46,6 @@ def _profile_for(no_speed_limit: bool) -> str:
     # (graphhopper_client._resolve_profile) : enregistré à titre informatif,
     # il doit refléter "Aucune limite" plutôt que toujours le profil par défaut.
     return settings.graphhopper_no_limit_profile if no_speed_limit else settings.graphhopper_profile
-
-
-def _ev_to_json(ev: EvSettings | None) -> str | None:
-    return json.dumps(ev.model_dump()) if ev else None
-
-
-def _ev_from_json(raw: str | None) -> EvSettings | None:
-    if not raw:
-        return None
-    try:
-        return EvSettings(**json.loads(raw))
-    except (ValueError, TypeError):
-        # Réglage écrit par une version dont le schéma différait : le trajet
-        # reste lisible, simplement sans son mode électrique.
-        return None
 
 
 def _route_to_out(route: Route) -> RouteOut:
@@ -74,7 +64,8 @@ def _route_to_out(route: Route) -> RouteOut:
         avoid_zones=[AvoidZone(**z) for z in json.loads(route.avoid_zones_json)] if route.avoid_zones_json else [],
         speed_limit_kmh=route.speed_limit_kmh,
         no_speed_limit=route.no_speed_limit,
-        ev=_ev_from_json(route.ev_json),
+        ev=ev_from_json(route.ev_json),
+        charging_stops=charging_stops_from_json(route.charging_stops_json),
     )
 
 
@@ -205,7 +196,8 @@ def create_route(body: RouteCreate, db: Session = Depends(get_db)):
         avoid_zones_json=json.dumps([z.model_dump() for z in body.avoid_zones]) if body.avoid_zones else None,
         speed_limit_kmh=body.speed_limit_kmh,
         no_speed_limit=body.no_speed_limit,
-        ev_json=_ev_to_json(body.ev),
+        ev_json=ev_to_json(body.ev),
+        charging_stops_json=charging_stops_to_json(body.charging_stops),
     )
     db.add(route)
     db.commit()
@@ -241,6 +233,11 @@ def update_route(route_id: int, body: RouteUpdate, db: Session = Depends(get_db)
         route.distance_m = body.distance_m
         route.duration_s = body.duration_s
         route.geometry_geojson = json.dumps(body.geometry_geojson.model_dump())
+        # Les arrêts décrivent ce tracé-là : remplacés avec lui, et effacés
+        # si le nouveau tracé n'en a pas (passage en thermique, trajet
+        # raccourci). Les laisser en place aurait exporté en GPX des bornes
+        # sans rapport avec l'itinéraire enregistré.
+        route.charging_stops_json = charging_stops_to_json(body.charging_stops)
     if "avoid_zones" in provided:
         route.avoid_zones_json = json.dumps([z.model_dump() for z in body.avoid_zones]) if body.avoid_zones else None
     if "speed_limit_kmh" in provided:
@@ -249,7 +246,7 @@ def update_route(route_id: int, body: RouteUpdate, db: Session = Depends(get_db)
         route.no_speed_limit = body.no_speed_limit
         route.profile = _profile_for(body.no_speed_limit)
     if "ev" in provided:
-        route.ev_json = _ev_to_json(body.ev)
+        route.ev_json = ev_to_json(body.ev)
 
     # Basculer un favori ne modifie pas le trajet lui-même.
     if provided - {"is_favorite"}:

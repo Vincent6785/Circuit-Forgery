@@ -1,4 +1,5 @@
 import logging
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -61,6 +62,25 @@ def _as_float(value: object) -> Optional[float]:
     return number if number == number else None
 
 
+# Un identifiant opaque collé au nom d'exploitant : suffisamment long, sans
+# espace et porteur de chiffres. Cible les "Réseau eborn/1ef35a80-ba8c-57bd-…"
+# et "FR*Y55/1958003911017570306" réellement présents dans la source, sans
+# toucher aux vrais noms composés ("Parking Nord/Sud", "A6/A7").
+_OPAQUE_ID_SUFFIX = re.compile(r"/(?=[^\s/]*\d)[^\s/]{12,}$")
+
+
+def clean_station_name(raw: str) -> str:
+    """Nom de station lisible.
+
+    La source publie parfois un identifiant technique en guise de nom : tel
+    quel, il se retrouve sur l'écran du GPS après export GPX et dans la liste
+    des arrêts. On retire le suffixe opaque et on garde la partie parlante ;
+    s'il ne reste rien d'exploitable, l'appelant retombe sur un libellé
+    générique.
+    """
+    return _OPAQUE_ID_SUFFIX.sub("", raw.strip()).strip(" -/")
+
+
 def _station_key(row: dict) -> Optional[str]:
     """Identifiant stable d'une station. `id_station_itinerance` vaut "Non
     concerné" hors réseau d'itinérance (valeur partagée par des milliers de
@@ -113,7 +133,7 @@ def group_rows_into_stations(rows: list[dict]) -> list[IrveStation]:
         if key in stations:
             stations[key] = _merge(stations[key], row, power)
             continue
-        name = (row.get("nom_station") or "").strip() or "Borne de recharge"
+        name = clean_station_name(row.get("nom_station") or "") or "Borne de recharge"
         address = (row.get("adresse_station") or "").strip() or None
         stations[key] = IrveStation(
             station_id=key,

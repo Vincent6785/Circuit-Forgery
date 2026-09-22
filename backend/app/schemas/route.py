@@ -104,10 +104,14 @@ class EvSettings(RequestModel):
     seconds_per_percent: float = Field(gt=0, le=3600)
 
 
-class ChargingStopOut(BaseModel):
+class ChargingStopOut(RequestModel):
     """Arrêt recharge inséré dans un trajet calculé. Ce n'est pas un waypoint
     de l'utilisateur : le tracé passe par là, mais la liste des points du
-    trajet n'en est pas modifiée."""
+    trajet n'en est pas modifiée.
+
+    Sert aussi de modèle d'entrée (sauvegarde d'un trajet, export GPX) : d'où
+    RequestModel, qui refuse NaN et ±Infinity — une coordonnée NaN renvoyée
+    telle quelle produirait un fichier GPX qu'aucun lecteur n'accepte."""
 
     lat: float
     lon: float
@@ -211,6 +215,11 @@ class RouteCreate(RequestModel):
     speed_limit_kmh: SpeedLimitKmh
     no_speed_limit: bool = False
     ev: Optional[EvSettings] = None
+    # Enregistrés avec le trajet plutôt que recalculés à la relecture : la
+    # géométrie sauvegardée passe déjà par ces bornes-là, et le parc IRVE
+    # évolue — un recalcul pourrait retenir d'autres bornes, incohérentes
+    # avec le tracé enregistré.
+    charging_stops: list[ChargingStopOut] = []
 
 
 # Champs décrivant le tracé calculé pour un jeu de waypoints : indissociables.
@@ -240,6 +249,10 @@ class RouteUpdate(RequestModel):
     # Nullable explicite : repasser un trajet en thermique se fait en envoyant
     # ev: null, comme pour les zones à éviter.
     ev: Optional[EvSettings] = None
+    # Suit le tracé : remplacé en même temps que waypoints/géométrie (voir
+    # ROUTE_DATA_FIELDS), pour que des arrêts périmés ne survivent pas à une
+    # modification du trajet.
+    charging_stops: Optional[list[ChargingStopOut]] = None
 
     @model_validator(mode="after")
     def _check_partial_update(self) -> "RouteUpdate":
@@ -277,6 +290,7 @@ class RouteOut(BaseModel):
     speed_limit_kmh: Optional[float] = None
     no_speed_limit: bool = False
     ev: Optional[EvSettings] = None
+    charging_stops: list[ChargingStopOut] = []
 
 
 class RouteSummaryOut(BaseModel):
@@ -325,6 +339,10 @@ class GpxExportRequest(RequestModel):
     name: Optional[RouteName] = None
     waypoints: list[Waypoint] = Field(min_length=2)
     geometry_geojson: LineStringGeometry
+    # Exportés en <wpt> (points d'intérêt), pas en <rtept> : ce ne sont pas
+    # des points du trajet, et les y mettre les transformerait en étapes de
+    # l'utilisateur au premier réimport.
+    charging_stops: list[ChargingStopOut] = []
 
 
 class GpxImportResponse(BaseModel):

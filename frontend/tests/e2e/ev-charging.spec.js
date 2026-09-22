@@ -1,11 +1,18 @@
+import { readFileSync } from "node:fs";
+
 import { test, expect } from "@playwright/test";
 import { clickMapAt, openRouteOptions, openTab, setupParisView } from "./helpers.js";
 
-// Paris → Orléans : assez long (plus de 100 km) pour que plusieurs recharges
-// soient dues avec l'intervalle par défaut de 20 km, et traversé par un parc
-// de bornes dense dans la base nationale IRVE.
-const START = [48.8566, 2.3522];
-const END = [47.9029, 1.9093];
+// Sud-est de Paris → Loiret : plus de 100 km, donc plusieurs recharges dues
+// avec l'intervalle par défaut de 20 km, dans une zone bien pourvue en bornes.
+//
+// Volontairement à l'écart de Paris intra-muros : les points d'intérêt vivent
+// dans la base partagée par toute la suite, et poi.spec.js en crée un à
+// 48.86, 2.33 — à quelques pixels du centre de Paris au zoom 8. Le marqueur
+// interceptait le clic destiné à la carte, et le trajet restait vide, mais
+// seulement quand les deux fichiers tournaient de front.
+const START = [48.6, 2.6];
+const END = [47.85, 1.95];
 
 const ROUTE_TIMEOUT = 40_000;
 
@@ -20,14 +27,21 @@ async function enableEv(page, { autonomy, interval } = {}) {
   await page.locator("#ev-interval-input").blur();
 }
 
-/** Pose un trajet long en plaçant départ et arrivée par leurs coordonnées :
- * les deux points sont hors écran à ce niveau de zoom, on passe donc par les
- * champs de l'onglet Itinéraire plutôt que par des clics carte. */
+/** Pose un trajet assez long pour demander plusieurs recharges : on dézoome
+ * jusqu'à voir Paris et Orléans ensemble, puis on clique les deux points.
+ *
+ * Chaque clic est confirmé avant le suivant. Sans cette attente, un clic
+ * posé pendant que Leaflet repositionne encore ses couches après le
+ * changement de vue était parfois perdu, et le trajet ne comptait qu'un
+ * point — observé uniquement quand plusieurs fichiers de tests tournent de
+ * front, donc sous charge. */
 async function drawLongRoute(page) {
   await page.evaluate(([a, b]) => {
     window.__map.setView([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], 8, { animate: false });
   }, [START, END]);
+  await page.waitForTimeout(300);
   await clickMapAt(page, ...START);
+  await expect(page.locator("#waypoint-list li")).toHaveCount(1);
   await clickMapAt(page, ...END);
   await expect(page.locator("#waypoint-list li")).toHaveCount(2);
 }
@@ -146,6 +160,46 @@ test("le mode électrique et ses réglages survivent au rechargement de la page"
   await expect(page.locator("#ev-enabled-checkbox")).toBeChecked();
   await expect(page.locator("#ev-autonomy-input")).toHaveValue("150");
   await expect(page.locator("#ev-interval-input")).toHaveValue("45");
+});
+
+test("l'export GPX du trajet courant contient les arrêts recharge", async ({ page }) => {
+  await setupParisView(page);
+  await enableEv(page);
+  await drawLongRoute(page);
+  await expect(page.locator("#charging-stop-list li").first()).toBeVisible({ timeout: ROUTE_TIMEOUT });
+
+  const stops = await page.evaluate(() => window.__getChargingStops());
+  const download = await Promise.all([
+    page.waitForEvent("download"),
+    page.locator("#export-gpx-btn").click(),
+  ]).then(([d]) => d);
+  const gpx = readFileSync(await download.path(), "utf8");
+
+  // Une balise <wpt> par arrêt, nommée dans l'ordre de passage.
+  expect(gpx.match(/<wpt /g) ?? []).toHaveLength(stops.length);
+  expect(gpx).toContain(`<name>1. ${stops[0].name}</name>`);
+  expect(gpx).toContain("<type>charging-station</type>");
+
+  // Le schéma GPX 1.1 impose metadata, wpt*, rte*, trk* : un lecteur strict
+  // refuserait un fichier où les repères suivent l'itinéraire.
+  expect(gpx.indexOf("<wpt ")).toBeLessThan(gpx.indexOf("<rte>"));
+  // Les arrêts ne sont pas des points du trajet : le <rte> n'en contient que
+  // le départ et l'arrivée.
+  const route = gpx.slice(gpx.indexOf("<rte>"), gpx.indexOf("</rte>"));
+  expect(route.match(/<rtept /g) ?? []).toHaveLength(2);
+});
+
+test("un trajet thermique s'exporte sans repère de recharge", async ({ page }) => {
+  await setupParisView(page);
+  await clickMapAt(page, 48.8566, 2.3522);
+  await clickMapAt(page, 48.8738, 2.295);
+  await expect(page.locator("#route-info")).not.toHaveClass(/hidden/, { timeout: ROUTE_TIMEOUT });
+
+  const download = await Promise.all([
+    page.waitForEvent("download"),
+    page.locator("#export-gpx-btn").click(),
+  ]).then(([d]) => d);
+  expect(readFileSync(await download.path(), "utf8")).not.toContain("<wpt ");
 });
 
 test("un trajet sauvegardé retrouve son mode électrique à l'ouverture", async ({ page, request }) => {

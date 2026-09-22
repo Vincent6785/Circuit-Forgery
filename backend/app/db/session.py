@@ -73,6 +73,8 @@ def _apply_additive_migrations() -> None:
             conn.execute(text("ALTER TABLE routes ADD COLUMN no_speed_limit BOOLEAN NOT NULL DEFAULT 0"))
         if "ev_json" not in existing_columns:
             conn.execute(text("ALTER TABLE routes ADD COLUMN ev_json TEXT"))
+        if "charging_stops_json" not in existing_columns:
+            conn.execute(text("ALTER TABLE routes ADD COLUMN charging_stops_json TEXT"))
 
 
 def get_db() -> Iterator[Session]:

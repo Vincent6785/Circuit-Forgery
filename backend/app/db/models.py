@@ -37,6 +37,9 @@ class Route(Base):
     # aussi bien pour un trajet enregistré avant l'existence du mode
     # électrique que pour un trajet qui ne l'utilise pas.
     ev_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    # Nullable — arrêts recharge du tracé enregistré. Absent pour un trajet
+    # thermique comme pour un trajet enregistré avant le mode électrique.
+    charging_stops_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
 
 class PointOfInterest(Base):

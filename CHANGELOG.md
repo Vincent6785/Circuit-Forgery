@@ -18,6 +18,10 @@ publie les images Docker correspondantes.
   enregistré avec le trajet. Nouveau champ `ev` sur `POST /api/routes/compute`
   et sur les trajets sauvegardés ; bornes mises en cache en base, avec repli
   propre (trajet sans arrêt, message explicite) si data.gouv est indisponible.
+- Export GPX des arrêts recharge, en `<wpt>` (repères) avec puissance, durée
+  de recharge et distance depuis le départ. Les arrêts sont enregistrés avec
+  le trajet, pour que l'export d'un trajet sauvegardé décrive les bornes par
+  lesquelles passe réellement sa géométrie.
 
 - Circuit en boucle : plusieurs points de passage imposés au lieu d'un seul.
   Le mode de pose reste actif d'un clic à l'autre, les points sont listés dans
