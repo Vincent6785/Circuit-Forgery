@@ -35,6 +35,23 @@ _DEFAULT_NOT_FOUND_MESSAGE = "GraphHopper n'a pas pu calculer cet itinéraire."
 _MAX_UPSTREAM_MESSAGE_LENGTH = 300
 _MAX_LOGGED_BODY_LENGTH = 500
 
+# round_trip tire un cap pseudo-aléatoire à partir de sa graine (0 par
+# défaut), projette des points intermédiaires dans cette direction puis les
+# accroche à la route la plus proche. Depuis un départ côtier, un cap vers
+# le large tombe en pleine mer : GraphHopper ne retente alors que 3 fois en
+# raccourcissant la distance de 5 %, sans changer de cap, et abandonne avec
+# « Could not find a valid point after 3 tries » — systématiquement pour une
+# même graine. Changer de graine change de cap : on retente donc avec les
+# graines suivantes (un échec de ce type coûte quelques millisecondes). Même
+# chose pour un point intermédiaire accroché à une île ou à un tronçon isolé,
+# que GraphHopper signale par une absence de connexion.
+_ROUND_TRIP_MAX_ATTEMPTS = 20
+_ROUND_TRIP_EXHAUSTED_MESSAGE = (
+    "Impossible de générer un circuit depuis ce point : trop de zones sans route "
+    "(mer, île…) dans les directions essayées. Choisissez un départ plus à "
+    "l'intérieur des terres ou une distance plus courte."
+)
+
 _FRIENDLY_MESSAGES = {
     "com.graphhopper.util.exceptions.PointNotFoundException": (
         "Un des points choisis est trop loin de toute route connue. "
@@ -76,6 +93,23 @@ def _tightened_speed_limit(speed_limit_kmh: Optional[float], no_speed_limit: boo
     if no_speed_limit or speed_limit_kmh is None or speed_limit_kmh >= 80:
         return None
     return speed_limit_kmh
+
+
+def _is_retryable_round_trip_failure(resp: httpx.Response) -> bool:
+    if resp.status_code != 400:
+        return False
+    data = _json_or_none(resp)
+    hints = data.get("hints") if isinstance(data, dict) else None
+    first_hint = hints[0] if isinstance(hints, list) and hints else None
+    if not isinstance(first_hint, dict):
+        return False
+    details = first_hint.get("details")
+    message = first_hint.get("message")
+    if details == "java.lang.IllegalArgumentException":
+        # Même classe d'exception que d'autres erreurs d'entrée (profil
+        # inconnu, etc.) qu'une autre graine ne corrigerait pas.
+        return isinstance(message, str) and message.startswith("Could not find a valid point")
+    return details == "com.graphhopper.util.exceptions.ConnectionNotFoundException"
 
 
 def _json_or_none(resp: httpx.Response) -> object:
@@ -203,31 +237,40 @@ class GraphHopperClient:
             "details": ["max_speed", "road_class"],
             "locale": "fr",
         }
-        if seed is not None:
-            base["round_trip.seed"] = seed
-        client = self._http.client
-
-        try:
-            if avoid_zones or tightened_speed_limit is not None:
-                # Comme route() : des zones à éviter et/ou un seuil resserré
-                # nécessitent un custom_model, donc un corps JSON. Vérifié
-                # empiriquement que round_trip (contrairement à
-                # alternative_route) accepte bien un custom_model combiné.
-                body = {
-                    **base,
+        use_post = bool(avoid_zones) or tightened_speed_limit is not None
+        if use_post:
+            # Comme route() : des zones à éviter et/ou un seuil resserré
+            # nécessitent un custom_model, donc un corps JSON. Vérifié
+            # empiriquement que round_trip (contrairement à
+            # alternative_route) accepte bien un custom_model combiné.
+            base.update(
+                {
                     "points": [[lon, lat]],
                     "points_encoded": False,
                     "ch.disable": True,
                     "custom_model": build_custom_model(avoid_zones or [], tightened_speed_limit),
                 }
-                resp = await client.post(f"{self._base_url}/route", json=body)
-            else:
-                params = {**base, "point": f"{lat},{lon}", "points_encoded": "false", "ch.disable": "true"}
-                resp = await client.get(f"{self._base_url}/route", params=params)
-        except httpx.HTTPError as exc:
-            raise _unreachable(exc) from exc
+            )
+        else:
+            base.update({"point": f"{lat},{lon}", "points_encoded": "false", "ch.disable": "true"})
+        client = self._http.client
+        # 0 est la graine par défaut de GraphHopper : sans graine fournie, la
+        # première tentative est identique à une requête sans graine.
+        first_seed = seed if seed is not None else 0
 
-        return _extract_paths(resp)[0]
+        for attempt in range(_ROUND_TRIP_MAX_ATTEMPTS):
+            request = {**base, "round_trip.seed": first_seed + attempt}
+            try:
+                if use_post:
+                    resp = await client.post(f"{self._base_url}/route", json=request)
+                else:
+                    resp = await client.get(f"{self._base_url}/route", params=request)
+            except httpx.HTTPError as exc:
+                raise _unreachable(exc) from exc
+            if not _is_retryable_round_trip_failure(resp):
+                return _extract_paths(resp)[0]
+
+        raise GraphHopperRouteNotFoundError(_ROUND_TRIP_EXHAUSTED_MESSAGE)
 
     async def route_alternatives(
         self,

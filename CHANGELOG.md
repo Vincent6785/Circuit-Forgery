@@ -36,6 +36,11 @@ publie les images Docker correspondantes.
   emplacements réservés sous `CF_MAX_WAYPOINTS`. Un circuit dense assorti de
   points de passage dépassait sinon cette limite, et le recalcul déclenché
   juste après la génération échouait en "Trop de waypoints".
+- Circuit en boucle depuis un départ proche de la mer : la génération
+  échouait en "Could not find a valid point after 3 tries" dès que le cap
+  tiré par GraphHopper pointait vers le large, et toujours au même endroit
+  faute de graine. Le backend retente désormais avec d'autres graines (donc
+  d'autres caps), et affiche un message clair s'il n'en trouve aucune.
 
 ## [0.1.0] - 2026-09-14
 
