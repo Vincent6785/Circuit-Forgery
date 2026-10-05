@@ -160,6 +160,63 @@ async def test_route_round_trip_maps_400_to_route_not_found():
         await _client().route_round_trip((48.85, 2.35), distance_m=20000)
 
 
+def _invalid_point_response():
+    message = "Could not find a valid point after 3 tries, for the point:46.83,-2.13"
+    return httpx.Response(
+        400,
+        json={"message": message, "hints": [{"message": message, "details": "java.lang.IllegalArgumentException"}]},
+    )
+
+
+@respx.mock
+async def test_route_round_trip_retries_with_next_seed_when_no_valid_point():
+    # Départ côtier : la graine 0 envoie le circuit vers le large, la suivante
+    # trouve des routes.
+    route = respx.get(f"{BASE_URL}/route").mock(
+        side_effect=[_invalid_point_response(), httpx.Response(200, json={"paths": [_path(distance=20000.0)]})]
+    )
+    result = await _client().route_round_trip((46.83, -2.13), distance_m=20000)
+    assert result["distance"] == 20000.0
+    seeds = [call.request.url.params["round_trip.seed"] for call in route.calls]
+    assert seeds == ["0", "1"]
+
+
+@respx.mock
+async def test_route_round_trip_retries_from_given_seed_over_post():
+    route = respx.post(f"{BASE_URL}/route").mock(
+        side_effect=[_invalid_point_response(), httpx.Response(200, json={"paths": [_path(distance=20000.0)]})]
+    )
+    await _client().route_round_trip((46.83, -2.13), distance_m=20000, seed=42, speed_limit_kmh=50)
+    seeds = [json.loads(call.request.content)["round_trip.seed"] for call in route.calls]
+    assert seeds == [42, 43]
+
+
+@respx.mock
+async def test_route_round_trip_gives_up_with_friendly_message():
+    route = respx.get(f"{BASE_URL}/route").mock(return_value=_invalid_point_response())
+    with pytest.raises(GraphHopperRouteNotFoundError) as exc_info:
+        await _client().route_round_trip((46.83, -2.13), distance_m=20000)
+    assert route.call_count == 20
+    assert "Could not find" not in str(exc_info.value)
+    assert "intérieur des terres" in str(exc_info.value)
+
+
+@respx.mock
+async def test_route_round_trip_does_not_retry_unrelated_bad_request():
+    route = respx.get(f"{BASE_URL}/route").mock(
+        return_value=httpx.Response(
+            400,
+            json={
+                "message": "The requested profile 'x' does not exist.",
+                "hints": [{"message": "The requested profile 'x' does not exist.", "details": "java.lang.IllegalArgumentException"}],
+            },
+        )
+    )
+    with pytest.raises(GraphHopperRouteNotFoundError):
+        await _client().route_round_trip((48.85, 2.35), distance_m=20000)
+    assert route.call_count == 1
+
+
 @respx.mock
 async def test_route_alternatives_returns_all_paths():
     route = respx.get(f"{BASE_URL}/route").mock(
