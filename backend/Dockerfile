@@ -23,7 +23,7 @@ ENV VITE_E2E_HOOKS=${VITE_E2E_HOOKS}
 RUN npm run build
 
 # --- Stage 2: backend Python servant l'API et le frontend buildé ---
-FROM python:3.12-slim-trixie@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 
 # Utilisateur non privilégié. UID/GID 1000 par défaut : celui de l'utilisateur
 # principal sur la plupart des hôtes Linux, pour que les fichiers du volume
